@@ -1,0 +1,16 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap');
+@import "tailwindcss";
+
+@theme {
+    --font-sans: 'DM Sans', sans-serif;
+    --letter-spacing: 0.1em;
+    --color-dark-grey: #292929;
+    --color-brown: #5C5049;
+    --color-light-grey: #AEACA7;
+    --color-beige: #B09585;
+    --color-white: #DFDDD8;
+}
+
+body {
+    letter-spacing: var(--letter-spacing);
+}

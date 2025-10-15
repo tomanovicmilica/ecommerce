@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/Administrator/source/repos/Ecomm_diplomski/API/Services/**)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
