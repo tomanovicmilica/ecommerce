@@ -1,11 +1,9 @@
 services:
-  # API Service
   - type: web
     name: ecommerce-api
-    env: dotnet
+    runtime: docker
     plan: free
-    buildCommand: cd API && dotnet publish -c Release -o out
-    startCommand: cd API/out && dotnet API.dll
+    dockerfilePath: ./Dockerfile
     envVars:
       - key: ASPNETCORE_ENVIRONMENT
         value: Production
@@ -19,5 +17,4 @@ services:
 databases:
   - name: ecommerce-db
     databaseName: ecommerce
-    user: ecommerce_user
     plan: free
