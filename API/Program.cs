@@ -45,8 +45,17 @@ builder.Services.AddSwaggerGen(c =>
 
 builder.Services.AddDbContext<StoreContext>(opt =>
 {
-    var connectionString = Environment.GetEnvironmentVariable("DATABASE_URL")
-        ?? builder.Configuration.GetConnectionString("DefaultConnection");
+    var connectionString = Environment.GetEnvironmentVariable("DATABASE_URL");
+
+    if (string.IsNullOrEmpty(connectionString))
+    {
+        connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+        Console.WriteLine("[DB] Using DefaultConnection from appsettings.json");
+    }
+    else
+    {
+        Console.WriteLine("[DB] Using DATABASE_URL from environment");
+    }
 
     // Render provides DATABASE_URL in a specific format that needs conversion
     if (connectionString != null && connectionString.StartsWith("postgres://"))
@@ -57,6 +66,7 @@ builder.Services.AddDbContext<StoreContext>(opt =>
         var user = uri.UserInfo.Split(':')[0];
         var password = uri.UserInfo.Split(':')[1];
         connectionString = $"Host={uri.Host};Port={uri.Port};Database={db};Username={user};Password={password};SSL Mode=Require;Trust Server Certificate=true";
+        Console.WriteLine($"[DB] Converted connection string - Host: {uri.Host}, Database: {db}");
     }
 
     opt.UseNpgsql(connectionString);
