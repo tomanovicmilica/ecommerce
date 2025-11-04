@@ -2,7 +2,8 @@ services:
   # API Service
   - type: web
     name: ecommerce-api
-    runtime: dotnet
+    env: dotnet
+    plan: free
     buildCommand: cd API && dotnet publish -c Release -o out
     startCommand: cd API/out && dotnet API.dll
     envVars:
@@ -14,9 +15,9 @@ services:
         fromDatabase:
           name: ecommerce-db
           property: connectionString
-    healthCheckPath: /api/health
 
 databases:
   - name: ecommerce-db
     databaseName: ecommerce
     user: ecommerce_user
+    plan: free
