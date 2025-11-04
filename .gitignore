@@ -173,11 +173,12 @@ API/wwwroot/digital-files/*
 !API/wwwroot/digital-files/.gitkeep
 
 # React build output (built files served by API)
-API/wwwroot/assets/
-API/wwwroot/index.html
-API/wwwroot/*.ico
-API/wwwroot/*.png
-API/wwwroot/*.svg
+# NOTE: We need to commit these files for Render deployment
+# API/wwwroot/assets/
+# API/wwwroot/index.html
+# API/wwwroot/*.ico
+# API/wwwroot/*.png
+# API/wwwroot/*.svg
 
 # ====================
 # Stripe & Payment
