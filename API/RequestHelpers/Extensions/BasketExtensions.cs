@@ -25,6 +25,7 @@ namespace API.RequestHelpers.Extensions
                     Description = item.Product.Description,
                     ImageUrl = item.Product.PictureUrl,
                     Quantity = item.Quantity,
+                    ProductType = item.Product.ProductType,
                     Attributes = GetItemAttributes(item),
                     AttributeValueIds = GetItemAttributeValueIds(item)
                 }).ToList()

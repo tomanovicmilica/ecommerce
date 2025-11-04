@@ -83,8 +83,8 @@ export default function Catalog() {
       <div className="w-full h-48 bg-gradient-to-r from-brown to-beige rounded-xl overflow-hidden shadow-sm">
         <div className="w-full h-full flex items-center justify-center bg-black/10">
           <div className="text-center text-white">
-            <h2 className="text-3xl font-bold mb-2">Istrazite nase proizvode</h2>
-            <p className="text-lg opacity-90">Pronadjite bas ono sto trazite</p>
+            <h2 className="text-3xl font-bold mb-2">Istražite naše proizvode</h2>
+            <p className="text-lg opacity-90">Pronađite baš ono sto tražite</p>
           </div>
         </div>
       </div>

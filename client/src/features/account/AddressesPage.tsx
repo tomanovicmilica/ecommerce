@@ -5,15 +5,20 @@ import agent from "../../app/api/agent";
 import LoadingComponent from "../../app/layout/LoadingComponent";
 
 interface Address {
-    id: number;
-    fullName: string;
-    address1: string;
-    address2?: string;
+    userAddressId?: number;
+    userId?: number;
+    firstName: string;
+    lastName: string;
+    company?: string;
+    addressLine1: string;
+    addressLine2?: string;
     city: string;
     state: string;
-    zipCode: string;
+    postalCode: string;
     country: string;
+    phoneNumber?: string;
     isDefault: boolean;
+    addressType?: string;
 }
 
 export default function AddressesPage() {
@@ -52,7 +57,7 @@ export default function AddressesPage() {
         if (confirm('Da li ste sigurni da želite da obrišete ovu adresu?')) {
             try {
                 await agent.Account.deleteAddress(id);
-                setAddresses(addresses.filter(a => a.id !== id));
+                setAddresses(addresses.filter(a => a.userAddressId !== id));
                 toast.success('Adresa je uspešno obrisana');
             } catch (error) {
                 toast.error('Greška pri brisanju adrese');
@@ -65,7 +70,7 @@ export default function AddressesPage() {
             await agent.Account.setDefaultAddress(id);
             setAddresses(addresses.map(a => ({
                 ...a,
-                isDefault: a.id === id
+                isDefault: a.userAddressId === id
             })));
             toast.success('Podrazumevana adresa je promenjena');
         } catch (error) {
@@ -76,7 +81,7 @@ export default function AddressesPage() {
     const handleSave = async (address: Address) => {
         try {
             if (editingAddress) {
-                await agent.Account.updateAddress(editingAddress.id, address);
+                await agent.Account.updateAddress(editingAddress.userAddressId!, address);
                 toast.success('Adresa je uspešno ažurirana');
             } else {
                 await agent.Account.addAddress(address);
@@ -132,7 +137,7 @@ export default function AddressesPage() {
                 <div className="grid md:grid-cols-2 gap-6">
                     {addresses.map((address) => (
                         <div
-                            key={address.id}
+                            key={address.userAddressId}
                             className={`relative p-6 rounded-xl border-2 transition-all ${
                                 address.isDefault
                                     ? 'border-brown bg-brown/5'
@@ -148,19 +153,20 @@ export default function AddressesPage() {
                             )}
 
                             <div className="mb-4">
-                                <h3 className="text-lg font-bold text-dark-grey mb-2">{address.fullName}</h3>
+                                <h3 className="text-lg font-bold text-dark-grey mb-2">{address.firstName} {address.lastName}</h3>
                                 <div className="text-gray-600 text-sm space-y-1">
-                                    <p>{address.address1}</p>
-                                    {address.address2 && <p>{address.address2}</p>}
-                                    <p>{address.city}, {address.state} {address.zipCode}</p>
+                                    <p>{address.addressLine1}</p>
+                                    {address.addressLine2 && <p>{address.addressLine2}</p>}
+                                    <p>{address.city}, {address.state} {address.postalCode}</p>
                                     <p>{address.country}</p>
+                                    {address.phoneNumber && <p>Tel: {address.phoneNumber}</p>}
                                 </div>
                             </div>
 
                             <div className="flex gap-2">
                                 {!address.isDefault && (
                                     <button
-                                        onClick={() => handleSetDefault(address.id)}
+                                        onClick={() => handleSetDefault(address.userAddressId!)}
                                         className="flex-1 px-4 py-2 text-sm border border-brown text-brown rounded-lg hover:bg-brown hover:text-white transition-colors"
                                     >
                                         Postavi kao podrazumevanu
@@ -173,7 +179,7 @@ export default function AddressesPage() {
                                     <Edit2 className="w-4 h-4" />
                                 </button>
                                 <button
-                                    onClick={() => handleDelete(address.id)}
+                                    onClick={() => handleDelete(address.userAddressId!)}
                                     className="px-4 py-2 text-sm bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
                                 >
                                     <Trash2 className="w-4 h-4" />
@@ -196,14 +202,15 @@ interface AddressFormProps {
 function AddressForm({ address, onCancel, onSave }: AddressFormProps) {
     const [formData, setFormData] = useState<Address>(
         address || {
-            id: 0,
-            fullName: '',
-            address1: '',
-            address2: '',
+            firstName: '',
+            lastName: '',
+            addressLine1: '',
+            addressLine2: '',
             city: '',
             state: '',
-            zipCode: '',
+            postalCode: '',
             country: 'Srbija',
+            phoneNumber: '',
             isDefault: false
         }
     );
@@ -230,32 +237,50 @@ function AddressForm({ address, onCancel, onSave }: AddressFormProps) {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6 max-w-2xl">
-                <div>
-                    <label htmlFor="fullName" className="block text-sm font-medium text-brown mb-2">
-                        Puno ime *
-                    </label>
-                    <input
-                        type="text"
-                        id="fullName"
-                        name="fullName"
-                        required
-                        value={formData.fullName}
-                        onChange={handleChange}
-                        className="w-full px-4 py-3 border border-light-grey rounded-xl focus:ring-2 focus:ring-brown focus:border-brown"
-                        placeholder="Ime i prezime"
-                    />
+                <div className="grid md:grid-cols-2 gap-4">
+                    <div>
+                        <label htmlFor="firstName" className="block text-sm font-medium text-brown mb-2">
+                            Ime *
+                        </label>
+                        <input
+                            type="text"
+                            id="firstName"
+                            name="firstName"
+                            required
+                            value={formData.firstName}
+                            onChange={handleChange}
+                            className="w-full px-4 py-3 border border-light-grey rounded-xl focus:ring-2 focus:ring-brown focus:border-brown"
+                            placeholder="Ime"
+                        />
+                    </div>
+
+                    <div>
+                        <label htmlFor="lastName" className="block text-sm font-medium text-brown mb-2">
+                            Prezime *
+                        </label>
+                        <input
+                            type="text"
+                            id="lastName"
+                            name="lastName"
+                            required
+                            value={formData.lastName}
+                            onChange={handleChange}
+                            className="w-full px-4 py-3 border border-light-grey rounded-xl focus:ring-2 focus:ring-brown focus:border-brown"
+                            placeholder="Prezime"
+                        />
+                    </div>
                 </div>
 
                 <div>
-                    <label htmlFor="address1" className="block text-sm font-medium text-brown mb-2">
+                    <label htmlFor="addressLine1" className="block text-sm font-medium text-brown mb-2">
                         Adresa *
                     </label>
                     <input
                         type="text"
-                        id="address1"
-                        name="address1"
+                        id="addressLine1"
+                        name="addressLine1"
                         required
-                        value={formData.address1}
+                        value={formData.addressLine1}
                         onChange={handleChange}
                         className="w-full px-4 py-3 border border-light-grey rounded-xl focus:ring-2 focus:ring-brown focus:border-brown"
                         placeholder="Ulica i broj"
@@ -263,14 +288,14 @@ function AddressForm({ address, onCancel, onSave }: AddressFormProps) {
                 </div>
 
                 <div>
-                    <label htmlFor="address2" className="block text-sm font-medium text-brown mb-2">
+                    <label htmlFor="addressLine2" className="block text-sm font-medium text-brown mb-2">
                         Dodatak adresi (opcionalno)
                     </label>
                     <input
                         type="text"
-                        id="address2"
-                        name="address2"
-                        value={formData.address2}
+                        id="addressLine2"
+                        name="addressLine2"
+                        value={formData.addressLine2}
                         onChange={handleChange}
                         className="w-full px-4 py-3 border border-light-grey rounded-xl focus:ring-2 focus:ring-brown focus:border-brown"
                         placeholder="Sprat, apartman, itd."
@@ -313,15 +338,15 @@ function AddressForm({ address, onCancel, onSave }: AddressFormProps) {
 
                 <div className="grid md:grid-cols-2 gap-4">
                     <div>
-                        <label htmlFor="zipCode" className="block text-sm font-medium text-brown mb-2">
+                        <label htmlFor="postalCode" className="block text-sm font-medium text-brown mb-2">
                             Poštanski broj *
                         </label>
                         <input
                             type="text"
-                            id="zipCode"
-                            name="zipCode"
+                            id="postalCode"
+                            name="postalCode"
                             required
-                            value={formData.zipCode}
+                            value={formData.postalCode}
                             onChange={handleChange}
                             className="w-full px-4 py-3 border border-light-grey rounded-xl focus:ring-2 focus:ring-brown focus:border-brown"
                             placeholder="21000"
@@ -348,6 +373,21 @@ function AddressForm({ address, onCancel, onSave }: AddressFormProps) {
                             <option value="Crna Gora">Crna Gora</option>
                         </select>
                     </div>
+                </div>
+
+                <div>
+                    <label htmlFor="phoneNumber" className="block text-sm font-medium text-brown mb-2">
+                        Telefon (opcionalno)
+                    </label>
+                    <input
+                        type="tel"
+                        id="phoneNumber"
+                        name="phoneNumber"
+                        value={formData.phoneNumber}
+                        onChange={handleChange}
+                        className="w-full px-4 py-3 border border-light-grey rounded-xl focus:ring-2 focus:ring-brown focus:border-brown"
+                        placeholder="+381 60 123 4567"
+                    />
                 </div>
 
                 <div className="flex items-center">

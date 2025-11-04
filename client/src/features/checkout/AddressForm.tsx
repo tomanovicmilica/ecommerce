@@ -1,23 +1,23 @@
 import { useFormContext } from "react-hook-form";
 
 export default function AddressForm() {
-  const { register, formState: { errors, isDirty } } = useFormContext();
+  const { register, formState: { errors } } = useFormContext();
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-semibold text-gray-900 mb-4">Shipping address</h2>
+      <h2 className="text-xl font-semibold text-gray-900 mb-4">Adresa za dostavu</h2>
 
       <div className="grid grid-cols-1 gap-6">
         {/* Full Name */}
         <div>
           <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-1">
-            Full name *
+            Puno ime *
           </label>
           <input
             id="fullName"
             type="text"
             {...register("fullName")}
-            className={`w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
+            className={`w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-light-grey focus:border-light-grey ${
               errors.fullName ? 'border-red-500' : 'border-gray-300'
             }`}
           />
@@ -29,13 +29,13 @@ export default function AddressForm() {
         {/* Address 1 */}
         <div>
           <label htmlFor="address1" className="block text-sm font-medium text-gray-700 mb-1">
-            Address line 1 *
+            Adresa linija 1 *
           </label>
           <input
             id="address1"
             type="text"
             {...register("address1")}
-            className={`w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
+            className={`w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-light-grey focus:border-light-grey ${
               errors.address1 ? 'border-red-500' : 'border-gray-300'
             }`}
           />
@@ -47,26 +47,26 @@ export default function AddressForm() {
         {/* Address 2 */}
         <div>
           <label htmlFor="address2" className="block text-sm font-medium text-gray-700 mb-1">
-            Address line 2
+            Adresa linija 2
           </label>
           <input
             id="address2"
             type="text"
             {...register("address2")}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-light-grey focus:border-light-grey"
           />
         </div>
 
         {/* Address 3 */}
         <div>
           <label htmlFor="address3" className="block text-sm font-medium text-gray-700 mb-1">
-            Address line 3
+            Adresa linija 3
           </label>
           <input
             id="address3"
             type="text"
             {...register("address3")}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-light-grey focus:border-light-grey"
           />
         </div>
 
@@ -74,13 +74,13 @@ export default function AddressForm() {
           {/* City */}
           <div>
             <label htmlFor="city" className="block text-sm font-medium text-gray-700 mb-1">
-              City *
+              Grad *
             </label>
             <input
               id="city"
               type="text"
               {...register("city")}
-              className={`w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
+              className={`w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-light-grey focus:border-light-grey ${
                 errors.city ? 'border-red-500' : 'border-gray-300'
               }`}
             />
@@ -92,13 +92,13 @@ export default function AddressForm() {
           {/* ZIP Code */}
           <div>
             <label htmlFor="zip" className="block text-sm font-medium text-gray-700 mb-1">
-              ZIP code *
+              Poštanski broj*
             </label>
             <input
               id="zip"
               type="text"
               {...register("zip")}
-              className={`w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
+              className={`w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-light-grey focus:border-light-grey ${
                 errors.zip ? 'border-red-500' : 'border-gray-300'
               }`}
             />
@@ -111,13 +111,13 @@ export default function AddressForm() {
         {/* Country */}
         <div className="sm:w-1/2">
           <label htmlFor="country" className="block text-sm font-medium text-gray-700 mb-1">
-            Country *
+            Država *
           </label>
           <input
             id="country"
             type="text"
             {...register("country")}
-            className={`w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
+            className={`w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-light-grey focus:border-light-grey ${
               errors.country ? 'border-red-500' : 'border-gray-300'
             }`}
           />
@@ -126,19 +126,30 @@ export default function AddressForm() {
           )}
         </div>
 
+        {/* Phone Number */}
+        <div className="sm:w-1/2">
+          <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700 mb-1">
+            Telefon
+          </label>
+          <input
+            id="phoneNumber"
+            type="tel"
+            {...register("phoneNumber")}
+            placeholder="+381 60 123 4567"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-light-grey focus:border-light-grey"
+          />
+        </div>
+
         {/* Save Address Checkbox */}
         <div className="flex items-center">
           <input
             id="saveAddress"
             type="checkbox"
-            disabled={!isDirty}
             {...register("saveAddress")}
-            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+            className="h-4 w-4 text-brown focus:ring-light-grey border-gray-300 rounded"
           />
-          <label htmlFor="saveAddress" className={`ml-2 block text-sm ${
-            isDirty ? 'text-gray-900' : 'text-gray-400'
-          }`}>
-            Save this as the default address
+          <label htmlFor="saveAddress" className="ml-2 block text-sm text-gray-900">
+            Sačuvaj adresu kao primarnu
           </label>
         </div>
       </div>

@@ -120,32 +120,87 @@ namespace API.Controllers
         [HttpDelete]
         public async Task<ActionResult> RemoveBasketItem(int productId, int quantity = 1, [FromBody] List<int>? attributeValueIds = null)
         {
+            Console.WriteLine($"RemoveBasketItem called: productId={productId}, quantity={quantity}");
+            Console.WriteLine($"attributeValueIds received: [{string.Join(", ", attributeValueIds ?? new List<int>())}]");
+
             var basket = await RetrieveBasket(GetBuyerId());
 
-            if (basket == null) return NotFound();
+            if (basket == null)
+            {
+                Console.WriteLine("ERROR: Basket not found");
+                return NotFound();
+            }
+
+            Console.WriteLine($"Basket found with {basket.Items.Count} items");
 
             // Find the variant by attributes to get the productVariantId
             int? productVariantId = null;
             if (attributeValueIds != null && attributeValueIds.Any())
             {
+                Console.WriteLine($"Has attribute value IDs, searching for variant...");
                 var product = await _context.Products!
                     .Include(p => p.Variants)
                         .ThenInclude(v => v.Attributes)
                     .FirstOrDefaultAsync(p => p.ProductId == productId);
-                
+
                 if (product != null)
                 {
+                    Console.WriteLine($"Product found, searching for variant with attributes: [{string.Join(", ", attributeValueIds)}]");
                     var variant = product.FindVariantByAttributes(attributeValueIds);
-                    productVariantId = variant?.Id;
+
+                    if (variant != null)
+                    {
+                        productVariantId = variant.Id;
+                        Console.WriteLine($"Variant found: ID {variant.Id}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"WARNING: Could not find variant for attributes [{string.Join(", ", attributeValueIds)}]");
+                        Console.WriteLine($"Attempting to remove by checking existing basket items...");
+
+                        // Try to find the item in the basket by productId and attribute matching
+                        var basketItem = basket.Items.FirstOrDefault(i =>
+                            i.ProductId == productId &&
+                            i.ProductVariant != null &&
+                            i.ProductVariant.Attributes != null &&
+                            i.ProductVariant.Attributes.Count == attributeValueIds.Count &&
+                            i.ProductVariant.Attributes.All(a => attributeValueIds.Contains(a.AttributeValueId))
+                        );
+
+                        if (basketItem != null)
+                        {
+                            productVariantId = basketItem.ProductVariantId;
+                            Console.WriteLine($"Found variant from basket item: ID {productVariantId}");
+                        }
+                        else
+                        {
+                            Console.WriteLine("ERROR: Could not find variant for the given attributes");
+                            return BadRequest(new ProblemDetails { Title = "Product variant not found" });
+                        }
+                    }
                 }
+                else
+                {
+                    Console.WriteLine($"ERROR: Product {productId} not found");
+                    return BadRequest(new ProblemDetails { Title = "Product not found" });
+                }
+            }
+            else
+            {
+                Console.WriteLine("No attribute value IDs provided - removing standard product variant");
             }
 
             basket.RemoveItem(productId, productVariantId, quantity);
 
             var result = await _context.SaveChangesAsync() > 0;
 
-            if (result) return Ok();
+            if (result)
+            {
+                Console.WriteLine("Item removed successfully");
+                return Ok();
+            }
 
+            Console.WriteLine("ERROR: Failed to save changes");
             return BadRequest(new ProblemDetails { Title = "Problem removing item from the basket" });
         }
 

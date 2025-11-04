@@ -23,4 +23,10 @@ namespace API.Dto
         public string? Notes { get; set; }
         public string? TrackingNumber { get; set; }
     }
+
+    public class SendEmailDto
+    {
+        public string Subject { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
+    }
 }

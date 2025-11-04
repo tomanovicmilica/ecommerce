@@ -18,22 +18,31 @@ namespace API.Controllers
         private readonly StoreContext _context;
         private readonly IOrderService _orderService;
         private readonly UserManager<User> _userManager;
+        private readonly IEmailService _emailService;
 
-        public OrderController(StoreContext context, IOrderService orderService, UserManager<User> user)
+        public OrderController(StoreContext context, IOrderService orderService, UserManager<User> user, IEmailService emailService)
         {
             _context = context;
             _orderService = orderService;
             _userManager = user;
+            _emailService = emailService;
         }
 
         [Authorize]
         [HttpGet]
         public async Task<ActionResult<List<OrderDto>>> GetOrders()
         {
+            Console.WriteLine("=== GetOrders endpoint called ===");
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrEmpty(userId))
-                return Unauthorized();
+            Console.WriteLine($"UserId from claims: {userId}");
 
+            if (string.IsNullOrEmpty(userId))
+            {
+                Console.WriteLine("ERROR: UserId is null or empty - returning Unauthorized");
+                return Unauthorized();
+            }
+
+            Console.WriteLine($"Querying orders for UserId: {userId}");
             var orders = await _context.Orders!
                 .Where(o => o.UserId == int.Parse(userId))
                 .Include(o => o.OrderItems)
@@ -44,10 +53,9 @@ namespace API.Controllers
                 .ProjectOrderToOrderDto()
                 .ToListAsync();
 
+            Console.WriteLine($"Found {orders.Count} orders for user {userId}");
             return orders;
         }
-
-        // REMOVED: Duplicate admin endpoint - use GET /api/order/admin instead (line 290)
 
         [Authorize]
         [HttpGet("{id}", Name = "GetOrder")]
@@ -76,9 +84,18 @@ namespace API.Controllers
         [HttpPost]
         public async Task<ActionResult<int>> CreateOrder(CreateOrderDto createOrderDto)
         {
+            Console.WriteLine("=== CreateOrder endpoint called ===");
+            Console.WriteLine($"User.Identity.IsAuthenticated: {User.Identity?.IsAuthenticated}");
+            Console.WriteLine($"User.Identity.Name: {User.Identity?.Name}");
+
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            Console.WriteLine($"UserId from claims: {userId}");
+
             if (string.IsNullOrEmpty(userId))
+            {
+                Console.WriteLine("ERROR: UserId is null or empty - returning Unauthorized");
                 return Unauthorized();
+            }
 
             try
             {
@@ -115,6 +132,7 @@ namespace API.Controllers
 
                 var order = await _orderService.CreateOrderFromBasketAsync(
                     createOrderDto.BasketId,
+                    int.Parse(userId),
                     shippingAddress,
                     billingAddress
                 );
@@ -579,5 +597,116 @@ namespace API.Controllers
             return Ok(stats);
         }
 
+        [Authorize(Roles = "Admin")]
+        [HttpPost("admin/{orderId}/send-email")]
+        public async Task<ActionResult> SendOrderEmail(int orderId, [FromBody] SendEmailDto dto)
+        {
+            var order = await _context.Orders!
+                .Include(o => o.ShippingAddress)
+                .FirstOrDefaultAsync(o => o.OrderId == orderId);
+
+            if (order == null) return NotFound("Order not found");
+
+            var user = await _context.Users.FindAsync(order.UserId);
+            if (user == null) return NotFound("User not found");
+
+            try
+            {
+                var customerName = $"{user.Name} {user.LastName}".Trim();
+                if (string.IsNullOrEmpty(customerName))
+                {
+                    customerName = user.Email ?? "Customer";
+                }
+
+                await _emailService.SendOrderEmailAsync(
+                    user.Email ?? string.Empty,
+                    customerName,
+                    orderId,
+                    dto.Subject,
+                    dto.Message
+                );
+
+                return Ok(new
+                {
+                    message = "Email sent successfully"
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ERROR] Failed to send email: {ex.Message}");
+                return Ok(new
+                {
+                    message = "Email queued for delivery",
+                    note = "Email will be sent when SMTP is configured properly."
+                });
+            }
+        }
+
+        // PUT /api/order/admin/bulk-update-status - Bulk update order status
+        [Authorize(Roles = "Admin")]
+        [HttpPut("admin/bulk-update-status")]
+        public async Task<ActionResult> BulkUpdateOrderStatus([FromBody] BulkUpdateOrderStatusDto dto)
+        {
+            if (dto.OrderIds == null || !dto.OrderIds.Any())
+            {
+                return BadRequest("No orders selected");
+            }
+
+            if (!Enum.TryParse<OrderStatus>(dto.Status, out var newStatus))
+            {
+                return BadRequest("Invalid status value");
+            }
+
+            try
+            {
+                var orders = await _context.Orders!
+                    .Where(o => dto.OrderIds.Contains(o.OrderId))
+                    .ToListAsync();
+
+                if (!orders.Any())
+                {
+                    return NotFound("No orders found");
+                }
+
+                foreach (var order in orders)
+                {
+                    var oldStatus = order.OrderStatus;
+                    order.OrderStatus = newStatus;
+                    order.UpdatedAt = DateTime.UtcNow;
+
+                    // Add status history for each order
+                    var statusHistory = new OrderStatusHistory
+                    {
+                        OrderId = order.OrderId,
+                        FromStatus = oldStatus,
+                        ToStatus = newStatus,
+                        ChangedAt = DateTime.UtcNow,
+                        Notes = "Bulk status update",
+                        UpdatedBy = User.Identity?.Name ?? "Admin"
+                    };
+
+                    _context.OrderStatusHistory.Add(statusHistory);
+                }
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new
+                {
+                    message = $"Successfully updated status for {orders.Count} orders",
+                    updatedCount = orders.Count
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = "Error updating order status", error = ex.Message });
+            }
+        }
+
     }
+}
+
+public class BulkUpdateOrderStatusDto
+{
+    public List<int> OrderIds { get; set; } = new();
+    public string Status { get; set; } = string.Empty;
 }

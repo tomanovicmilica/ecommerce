@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
-import { Search, Filter, Eye, Edit, UserX, MoreHorizontal, Mail, Shield } from 'lucide-react';
+import { Search, Filter, Eye, Edit, UserX, UserCheck, MoreHorizontal, Mail, Shield } from 'lucide-react';
 import Table from '../../../app/components/ui/Table';
 import LoadingComponent from '../../../app/layout/LoadingComponent';
 import AdminLayout from '../layout/AdminLayout';
 import agent from '../../../app/api/agent';
 import { toast } from 'react-toastify';
+import UserDetailsModal from './UserDetailsModal';
+import EditUserModal from './EditUserModal';
+import SendEmailModal from './SendEmailModal';
 
 interface User {
     id: number;
@@ -26,6 +29,10 @@ export default function UserManagement() {
     const [selectedRole, setSelectedRole] = useState('');
     const [selectedStatus, setSelectedStatus] = useState('');
     const [selectedUsers, setSelectedUsers] = useState<number[]>([]);
+    const [showDetailsModal, setShowDetailsModal] = useState(false);
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [showEmailModal, setShowEmailModal] = useState(false);
+    const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
     useEffect(() => {
         fetchUsers();
@@ -143,9 +150,48 @@ export default function UserManagement() {
         }
     };
 
-    const sendEmail = (userId: number) => {
-        // TODO: Implement email functionality
-        console.log('Sending email to user:', userId);
+    const handleViewDetails = (user: User) => {
+        setSelectedUser(user);
+        setShowDetailsModal(true);
+    };
+
+    const handleEditUser = (user: User) => {
+        setSelectedUser(user);
+        setShowEditModal(true);
+    };
+
+    const handleSendEmail = (user: User) => {
+        setSelectedUser(user);
+        setShowEmailModal(true);
+    };
+
+    const handleSuspendUser = async (user: User) => {
+        if (!confirm(`Da li ste sigurni da želite da ${user.status === 'Suspended' ? 'uklonite suspenziju' : 'suspendjete'} korisnika ${user.firstName} ${user.lastName}?`)) {
+        return;
+    }
+
+        try {
+            if (user.status === 'Suspended') {
+                await agent.Admin.unsuspendUser(user.id);
+                toast.success('Suspenzija korisnika uspešno uklonjena');
+            } else {
+                await agent.Admin.suspendUser(user.id);
+                toast.success('Korisnik uspešno suspendovan');
+            }
+            fetchUsers();
+        } catch (error) {
+            console.error('Failed to toggle suspend user:', error);
+            toast.error('Greška pri promeni statusa korisnika');
+        }
+    };
+
+    const handleSaveUser = async (userId: number, userData: Partial<User>) => {
+        await agent.Admin.updateUser(userId, userData);
+        await fetchUsers();
+    };
+
+    const handleSendEmailToUser = async (userId: number, subject: string, message: string) => {
+        await agent.Admin.sendEmailToUser(userId, subject, message);
     };
 
     if (loading) return <LoadingComponent />;
@@ -302,31 +348,40 @@ export default function UserManagement() {
                                 {user.orderCount}
                             </td>
                             <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                                ${user.totalSpent.toFixed(2)}
+                                {user.totalSpent} din
                             </td>
                             <td className="px-4 py-3 text-sm text-gray-600">
                                 {user.lastLogin ? new Date(user.lastLogin).toLocaleDateString() : 'Never'}
                             </td>
                             <td className="px-4 py-3">
                                 <div className="flex items-center space-x-2">
-                                    <button className="p-1 text-gray-400 hover:text-browntransition-colors" title="View Details">
-                                        <Eye className="w-4 h-4" />
+                                    <button 
+                                        onClick={() => handleViewDetails(user)}
+                                        className="p-1 text-gray-400 hover:text-brown transition-colors" 
+                                        title="View Details"
+                                    >
+                                    <Eye className="w-4 h-4" />
                                     </button>
                                     <button
-                                        onClick={() => sendEmail(user.id)}
+                                        onClick={() => handleSendEmail(user)}
                                         className="p-1 text-gray-400 hover:text-green-600 transition-colors"
                                         title="Send Email"
                                     >
-                                        <Mail className="w-4 h-4" />
+                                    <Mail className="w-4 h-4" />
                                     </button>
-                                    <button className="p-1 text-gray-400 hover:text-brown transition-colors" title="Edit User">
-                                        <Edit className="w-4 h-4" />
+                                    <button 
+                                        onClick={() => handleEditUser(user)}
+                                        className="p-1 text-gray-400 hover:text-brown transition-colors" 
+                                        title="Edit User"
+                                    >
+                                    <Edit className="w-4 h-4" />
                                     </button>
-                                    <button className="p-1 text-gray-400 hover:text-red-600 transition-colors" title="Suspend User">
-                                        <UserX className="w-4 h-4" />
-                                    </button>
-                                    <button className="p-1 text-gray-400 hover:text-gray-600 transition-colors" title="More Options">
-                                        <MoreHorizontal className="w-4 h-4" />
+                                    <button 
+                                        onClick={() => handleSuspendUser(user)}
+                                        className={`p-1 ${user.status === 'Suspended' ? 'text-green-600 hover:text-green-700' : 'text-gray-400 hover:text-red-600'} transition-colors`}
+                                        title={user.status === 'Suspended' ? 'Unsuspend User' : 'Suspend User'}
+                                    >
+                                    {user.status === 'Suspended' ? <UserCheck className="w-4 h-4" /> : <UserX className="w-4 h-4" />}
                                     </button>
                                 </div>
                             </td>
@@ -351,6 +406,38 @@ export default function UserManagement() {
                 </div>
             )}
             </div>
+
+            {showDetailsModal && selectedUser && (
+                <UserDetailsModal
+                    user={selectedUser}
+                    onClose={() => {
+                        setShowDetailsModal(false);
+                        setSelectedUser(null);
+                    }}
+                />
+            )}
+
+            {showEditModal && selectedUser && (
+                <EditUserModal
+                    user={selectedUser}
+                    onClose={() => {
+                        setShowEditModal(false);
+                        setSelectedUser(null);
+                    }}
+                    onSave={handleSaveUser}
+                />
+            )}
+
+            {showEmailModal && selectedUser && (
+                <SendEmailModal
+                    user={selectedUser}
+                    onClose={() => {
+                        setShowEmailModal(false);
+                        setSelectedUser(null);
+                    }}
+                    onSend={handleSendEmailToUser}
+                />
+            )}
         </AdminLayout>
     );
 }

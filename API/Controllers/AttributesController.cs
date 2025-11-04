@@ -83,6 +83,59 @@ namespace API.Controllers
                 attributeId = value.AttributeId
             });
         }
+
+        [HttpPut("{id}")]
+        public async Task<ActionResult<object>> UpdateAttribute(int id, [FromBody] CreateAttributeDto dto)
+        {
+            var attribute = await _context.Attributes!.FindAsync(id);
+            if (attribute == null) return NotFound();
+
+            attribute.Name = dto.Name;
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new
+            {
+                id = attribute.AttributeId,
+                name = attribute.Name,
+                type = "text",
+                values = attribute.Values?.Select(v => new
+                {
+                    id = v.AttributeValueId,
+                    value = v.Value,
+                    attributeId = v.AttributeId
+                }).ToList()
+            });
+        }
+
+        [HttpDelete("{id}")]
+        public async Task<ActionResult> DeleteAttribute(int id)
+        {
+            var attribute = await _context.Attributes!
+                .Include(a => a.Values)
+                .FirstOrDefaultAsync(a => a.AttributeId == id);
+
+            if (attribute == null) return NotFound();
+
+            _context.Attributes!.Remove(attribute);
+            await _context.SaveChangesAsync();
+
+            return NoContent();
+        }
+
+        [HttpDelete("{attributeId}/values/{valueId}")]
+        public async Task<ActionResult> DeleteAttributeValue(int attributeId, int valueId)
+        {
+            var attributeValue = await _context.AttributeValues!
+                .FirstOrDefaultAsync(v => v.AttributeValueId == valueId && v.AttributeId == attributeId);
+
+            if (attributeValue == null) return NotFound();
+
+            _context.AttributeValues!.Remove(attributeValue);
+            await _context.SaveChangesAsync();
+
+            return NoContent();
+        }
     }
 
     public class CreateAttributeDto

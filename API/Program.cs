@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -43,13 +44,29 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 builder.Services.AddDbContext<StoreContext>(opt =>
-    opt.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+{
+    var connectionString = Environment.GetEnvironmentVariable("DATABASE_URL")
+        ?? builder.Configuration.GetConnectionString("DefaultConnection");
+
+    // Render provides DATABASE_URL in a specific format that needs conversion
+    if (connectionString != null && connectionString.StartsWith("postgres://"))
+    {
+        // Parse Render's DATABASE_URL format: postgres://user:password@host:port/database
+        var uri = new Uri(connectionString);
+        var db = uri.AbsolutePath.Trim('/');
+        var user = uri.UserInfo.Split(':')[0];
+        var password = uri.UserInfo.Split(':')[1];
+        connectionString = $"Host={uri.Host};Port={uri.Port};Database={db};Username={user};Password={password};SSL Mode=Require;Trust Server Certificate=true";
+    }
+
+    opt.UseNpgsql(connectionString);
+});
 
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("CorsPolicy", policy =>
     {
-        policy.WithOrigins("http://localhost:5173", "http://localhost:5174", "http://localhost:5176") 
+        policy.WithOrigins("http://localhost:5173") 
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
@@ -86,6 +103,21 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                     context.Token = accessToken;
                 }
                 return Task.CompletedTask;
+            },
+            OnAuthenticationFailed = context =>
+            {
+                Console.WriteLine($"[JWT] Authentication failed: {context.Exception.GetType().Name} - {context.Exception.Message}");
+                return Task.CompletedTask;
+            },
+            OnTokenValidated = context =>
+            {
+                Console.WriteLine($"[JWT] Token validated successfully for user: {context.Principal?.Identity?.Name}");
+                return Task.CompletedTask;
+            },
+            OnChallenge = context =>
+            {
+                Console.WriteLine($"[JWT] Challenge issued: {context.Error}, {context.ErrorDescription}");
+                return Task.CompletedTask;
             }
         };
     });
@@ -96,6 +128,7 @@ builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<ImageService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IDigitalDeliveryService, DigitalDeliveryService>();
+builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddSignalR();
 var app = builder.Build();
 
@@ -115,6 +148,8 @@ if (app.Environment.IsDevelopment())
 
 app.UseRouting();
 //app.UseHttpsRedirection();
+app.UseDefaultFiles();
+app.UseStaticFiles();
 
 app.UseCors("CorsPolicy");
 
@@ -123,6 +158,9 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<API.Hubs.NotificationHub>("/notificationHub");
+
+// SPA fallback for React Router
+app.MapFallbackToFile("index.html");
 
 var scope = app.Services.CreateScope();
 var context = scope.ServiceProvider.GetRequiredService<StoreContext>();

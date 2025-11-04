@@ -64,7 +64,7 @@ namespace API.Controllers
 
         [Authorize(Roles = "Admin")]
         [HttpPost]
-        public async Task<ActionResult<Product>> CreateProduct([FromForm] CreateProductDto productDto)
+        public async Task<ActionResult<Product>> CreateProduct([FromForm] CreateProductDto productDto, [FromForm] string? variants)
         {
 
             var product = _mapper.Map<Product>(productDto);
@@ -80,45 +80,286 @@ namespace API.Controllers
                 product.PublicId = imageResult.PublicId;
             }
 
+            // Handle digital file upload
+            if (productDto.DigitalFile != null)
+            {
+                var digitalFileResult = await _imageService.AddDigitalFileAsync(productDto.DigitalFile);
+
+                if (digitalFileResult.Error != null)
+                    return BadRequest(new ProblemDetails { Title = digitalFileResult.Error.Message });
+
+                product.DigitalFileUrl = digitalFileResult.SecureUrl.ToString();
+            }
+            // If no digital file uploaded but DigitalFileUrl provided, use that
+            else if (!string.IsNullOrEmpty(productDto.DigitalFileUrl))
+            {
+                product.DigitalFileUrl = productDto.DigitalFileUrl;
+            }
+
             _context.Products!.Add(product);
 
-            var result = await _context.SaveChangesAsync() > 0;
+            // Save the product first to get the ProductId
+            var productSaved = await _context.SaveChangesAsync() > 0;
+            if (!productSaved) return BadRequest(new ProblemDetails { Title = "Problem creating new product" });
 
-            if (result) return CreatedAtRoute("GetProduct", new { Id = product.ProductId }, product);
+            // Parse and handle variants if they exist
+            List<ProductVariantDto>? variantDtos = null;
+            if (!string.IsNullOrEmpty(variants))
+            {
+                try
+                {
+                    Console.WriteLine($"Variants JSON received: {variants}");
+                    var jsonOptions = new System.Text.Json.JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true
+                    };
+                    variantDtos = System.Text.Json.JsonSerializer.Deserialize<List<ProductVariantDto>>(variants, jsonOptions);
+                    Console.WriteLine($"Deserialized {variantDtos?.Count ?? 0} variants");
+                    if (variantDtos != null)
+                    {
+                        foreach (var v in variantDtos)
+                        {
+                            Console.WriteLine($"Variant: Price={v.Price}, Qty={v.QuantityInStock}, AttributeValueIds={string.Join(",", v.AttributeValueIds ?? new List<int>())}");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error deserializing variants: {ex.Message}");
+                }
+            }
 
-            return BadRequest(new ProblemDetails { Title = "Problem creating new product" });
+            if (variantDtos != null && variantDtos.Any())
+            {
+                foreach (var variantDto in variantDtos)
+                {
+                    var variant = new ProductVariant
+                    {
+                        ProductId = product.ProductId,
+                        QuantityInStock = variantDto.QuantityInStock,
+                        PriceOverride = variantDto.Price != product.Price ? variantDto.Price : null
+                    };
 
+                    _context.ProductVariants!.Add(variant);
+                    await _context.SaveChangesAsync(); // Save to get variant ID
+
+                    // Add attribute value associations
+                    if (variantDto.AttributeValueIds != null && variantDto.AttributeValueIds.Any())
+                    {
+                        foreach (var attributeValueId in variantDto.AttributeValueIds)
+                        {
+                            var productVariantAttribute = new ProductVariantAttribute
+                            {
+                                ProductVariantId = variant.Id,
+                                AttributeValueId = attributeValueId
+                            };
+                            _context.ProductVariantAttributes!.Add(productVariantAttribute);
+                        }
+                        await _context.SaveChangesAsync();
+                    }
+                }
+            }
+
+            // Return a simple DTO to avoid circular reference
+            var createdProductDto = new CreateProductDto
+            {
+                Name = product.Name,
+                Description = product.Description,
+                Price = product.Price,
+                CategoryId = product.CategoryId,
+                ImageUrl = product.PictureUrl,
+                ProductType = product.ProductType,
+                DigitalFileUrl = product.DigitalFileUrl,
+                IsInstantDelivery = product.IsInstantDelivery
+            };
+
+            return CreatedAtRoute("GetProduct", new { Id = product.ProductId }, createdProductDto);
         }
 
         [Authorize(Roles = "Admin")]
         [HttpPut]
-        public async Task<ActionResult<Product>> UpdateProduct([FromForm] UpdateProductDto productDto)
+        public async Task<ActionResult<UpdateProductDto>> UpdateProduct([FromForm] UpdateProductDto productDto, [FromForm] string? variants)
         {
-            var product = await _context.Products!.Include(p => p.Variants).FirstOrDefaultAsync(p => p.ProductId == productDto.ProductId);
-
-            if (product == null) return NotFound();
-
-            _mapper.Map(productDto, product);
-
-            if (productDto.File != null)
+            try
             {
-                var imageUploadResult = await _imageService.AddImageAsync(productDto.File);
+                Console.WriteLine($"=== UpdateProduct called ===");
+                Console.WriteLine($"ProductId: {productDto.ProductId}");
+                Console.WriteLine($"Name: {productDto.Name}");
+                Console.WriteLine($"Price: {productDto.Price}");
+                Console.WriteLine($"CategoryId: {productDto.CategoryId}");
+                Console.WriteLine($"Variants JSON: {variants}");
 
-                if (imageUploadResult.Error != null)
-                    return BadRequest(new ProblemDetails { Title = imageUploadResult.Error.Message });
+                var product = await _context.Products!
+                    .Include(p => p.Category)
+                    .FirstOrDefaultAsync(p => p.ProductId == productDto.ProductId);
 
-                if (!string.IsNullOrEmpty(product.PublicId))
-                    await _imageService.DeleteImageAsync(product.PublicId);
+                if (product == null) return NotFound();
 
-                product.PictureUrl = imageUploadResult.SecureUrl.ToString();
-                product.PublicId = imageUploadResult.PublicId;
+                _mapper.Map(productDto, product);
+
+                if (productDto.File != null)
+                {
+                    var imageUploadResult = await _imageService.AddImageAsync(productDto.File);
+
+                    if (imageUploadResult.Error != null)
+                        return BadRequest(new ProblemDetails { Title = imageUploadResult.Error.Message });
+
+                    if (!string.IsNullOrEmpty(product.PublicId))
+                        await _imageService.DeleteImageAsync(product.PublicId);
+
+                    product.PictureUrl = imageUploadResult.SecureUrl.ToString();
+                    product.PublicId = imageUploadResult.PublicId;
+                }
+
+                // Handle digital file upload
+                if (productDto.DigitalFile != null)
+                {
+                    var digitalFileResult = await _imageService.AddDigitalFileAsync(productDto.DigitalFile);
+
+                    if (digitalFileResult.Error != null)
+                        return BadRequest(new ProblemDetails { Title = digitalFileResult.Error.Message });
+
+                    product.DigitalFileUrl = digitalFileResult.SecureUrl.ToString();
+                }
+                // If no digital file uploaded but DigitalFileUrl provided, use that
+                else if (!string.IsNullOrEmpty(productDto.DigitalFileUrl))
+                {
+                    product.DigitalFileUrl = productDto.DigitalFileUrl;
+                }
+
+                // Handle variants update
+                if (!string.IsNullOrEmpty(variants))
+                {
+                    var jsonOptions = new System.Text.Json.JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true
+                    };
+                    var variantDtos = System.Text.Json.JsonSerializer.Deserialize<List<ProductVariantDto>>(variants, jsonOptions);
+
+                    if (variantDtos != null && variantDtos.Any())
+                    {
+                        // Get existing variants for this product
+                        var existingVariants = await _context.ProductVariants!
+                            .Include(v => v.Attributes)
+                            .Where(v => v.ProductId == product.ProductId)
+                            .ToListAsync();
+
+                        // Delete variants that are no longer in the update
+                        var variantIdsToKeep = variantDtos
+                            .Where(v => v.ProductVariantId > 0)
+                            .Select(v => v.ProductVariantId)
+                            .ToList();
+
+                        var variantsToDelete = existingVariants
+                            .Where(v => !variantIdsToKeep.Contains(v.Id))
+                            .ToList();
+
+                        foreach (var variantToDelete in variantsToDelete)
+                        {
+                            // Delete associated attributes first
+                            var attributesToDelete = _context.ProductVariantAttributes!
+                                .Where(a => a.ProductVariantId == variantToDelete.Id);
+                            _context.ProductVariantAttributes!.RemoveRange(attributesToDelete);
+
+                            // Delete the variant
+                            _context.ProductVariants!.Remove(variantToDelete);
+                        }
+
+                        // Process each variant (update existing or create new)
+                        foreach (var variantDto in variantDtos)
+                        {
+                            if (variantDto.ProductVariantId > 0)
+                            {
+                                // Update existing variant
+                                var existingVariant = existingVariants.FirstOrDefault(v => v.Id == variantDto.ProductVariantId);
+                                if (existingVariant != null)
+                                {
+                                    existingVariant.QuantityInStock = variantDto.QuantityInStock;
+                                    existingVariant.PriceOverride = variantDto.PriceOverride;
+
+                                    // Update attributes: remove old, add new
+                                    var oldAttributes = _context.ProductVariantAttributes!
+                                        .Where(a => a.ProductVariantId == existingVariant.Id);
+                                    _context.ProductVariantAttributes!.RemoveRange(oldAttributes);
+
+                                    if (variantDto.AttributeValueIds != null && variantDto.AttributeValueIds.Any())
+                                    {
+                                        foreach (var attributeValueId in variantDto.AttributeValueIds)
+                                        {
+                                            var productVariantAttribute = new ProductVariantAttribute
+                                            {
+                                                ProductVariantId = existingVariant.Id,
+                                                AttributeValueId = attributeValueId
+                                            };
+                                            _context.ProductVariantAttributes!.Add(productVariantAttribute);
+                                        }
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                // Create new variant
+                                var newVariant = new ProductVariant
+                                {
+                                    ProductId = product.ProductId,
+                                    QuantityInStock = variantDto.QuantityInStock,
+                                    PriceOverride = variantDto.PriceOverride
+                                };
+                                _context.ProductVariants!.Add(newVariant);
+                                await _context.SaveChangesAsync(); // Save to get variant ID
+
+                                // Add attributes for new variant
+                                if (variantDto.AttributeValueIds != null && variantDto.AttributeValueIds.Any())
+                                {
+                                    foreach (var attributeValueId in variantDto.AttributeValueIds)
+                                    {
+                                        var productVariantAttribute = new ProductVariantAttribute
+                                        {
+                                            ProductVariantId = newVariant.Id,
+                                            AttributeValueId = attributeValueId
+                                        };
+                                        _context.ProductVariantAttributes!.Add(productVariantAttribute);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                var result = await _context.SaveChangesAsync() > 0;
+
+                if (result)
+                {
+                    // Return DTO to avoid circular reference issues
+                    var updatedProductDto = new UpdateProductDto
+                    {
+                        ProductId = product.ProductId,
+                        Name = product.Name,
+                        Price = product.Price,
+                        Description = product.Description,
+                        CategoryId = product.CategoryId,
+                        CategoryName = product.Category?.Name,
+                        ImageUrl = product.PictureUrl,
+                        ProductType = product.ProductType,
+                        DigitalFileUrl = product.DigitalFileUrl,
+                        IsInstantDelivery = product.IsInstantDelivery
+                    };
+                    return Ok(updatedProductDto);
+                }
+
+                return BadRequest(new ProblemDetails { Title = "Problem updating product" });
             }
-            
-            var result = await _context.SaveChangesAsync() > 0;
-
-            if (result) return Ok(product);
-
-            return BadRequest(new ProblemDetails { Title = "Problem updating product" });
+            catch (Exception ex)
+            {
+                Console.WriteLine($"=== UpdateProduct Error ===");
+                Console.WriteLine($"Message: {ex.Message}");
+                Console.WriteLine($"Inner Exception: {ex.InnerException?.Message}");
+                Console.WriteLine($"Stack Trace: {ex.StackTrace}");
+                return BadRequest(new ProblemDetails {
+                    Title = "Error updating product",
+                    Detail = $"{ex.Message} | Inner: {ex.InnerException?.Message}"
+                });
+            }
         }
 
         [Authorize(Roles = "Admin")]
@@ -241,8 +482,10 @@ namespace API.Controllers
                 TotalStock = p.Variants.Sum(v => v.QuantityInStock),
                 Variants = p.Variants.Select(v => new
                 {
-                    v.Id,
+                    ProductVariantId = v.Id,
                     v.QuantityInStock,
+                    Price = (long)(v.PriceOverride.HasValue ? v.PriceOverride.Value : p.Price),
+                    PriceOverride = v.PriceOverride.HasValue ? (long)v.PriceOverride.Value : (long?)null,
                     AttributeValueIds = v.Attributes.Select(a => a.AttributeValueId).ToList(),
                     Attributes = v.Attributes.Select(a => new
                     {
@@ -342,6 +585,79 @@ namespace API.Controllers
 
             return BadRequest(new ProblemDetails { Title = "Problem adjusting stock" });
         }
+
+        // PUT /api/products/bulk-update-prices - Bulk update product prices
+        [Authorize(Roles = "Admin")]
+        [HttpPut("bulk-update-prices")]
+        public async Task<ActionResult> BulkUpdatePrices([FromBody] BulkPriceUpdateDto dto)
+        {
+            if (dto.ProductIds == null || !dto.ProductIds.Any())
+            {
+                return BadRequest("No products selected");
+            }
+
+            if (dto.Value < 0)
+            {
+                return BadRequest("Value cannot be negative");
+            }
+
+            try
+            {
+                var products = await _context.Products!
+                    .Where(p => dto.ProductIds.Contains(p.ProductId))
+                    .ToListAsync();
+
+                if (!products.Any())
+                {
+                    return NotFound("No products found");
+                }
+
+                foreach (var product in products)
+                {
+                    decimal newPrice;
+
+                    switch (dto.UpdateType.ToLower())
+                    {
+                        case "increase":
+                            // Value is treated as percentage for increase/decrease
+                            newPrice = product.Price * (1 + dto.Value / 100);
+                            break;
+
+                        case "decrease":
+                            newPrice = product.Price * (1 - dto.Value / 100);
+                            break;
+
+                        case "set":
+                            newPrice = dto.Value;
+                            break;
+
+                        default:
+                            return BadRequest("Invalid update type. Use 'increase', 'decrease', or 'set'");
+                    }
+
+                    // Ensure price doesn't go below 0
+                    if (newPrice < 0)
+                    {
+                        return BadRequest($"Price for product {product.Name} would become negative");
+                    }
+
+                    // Round to 2 decimal places and cast to long
+                    product.Price = (long)Math.Round(newPrice, 2);
+                }
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new
+                {
+                    message = $"Successfully updated prices for {products.Count} products",
+                    updatedCount = products.Count
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = "Error updating prices", error = ex.Message });
+            }
+        }
     }
 }
 
@@ -357,4 +673,11 @@ public class StockAdjustmentDto
     public int VariantId { get; set; }
     public int Quantity { get; set; }
     public string Reason { get; set; } = string.Empty;
+}
+
+public class BulkPriceUpdateDto
+{
+    public List<int> ProductIds { get; set; } = new();
+    public string UpdateType { get; set; } = string.Empty; // "increase", "decrease", or "set"
+    public decimal Value { get; set; }
 }

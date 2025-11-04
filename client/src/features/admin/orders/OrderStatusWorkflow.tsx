@@ -16,7 +16,7 @@ import type { OrderStatusHistory } from '../../../app/models/order';
 interface Props {
     orderId: number;
     currentStatus: string;
-    onStatusUpdate: (newStatus: string) => void;
+    onStatusUpdate: () => Promise<void>;
 }
 
 export default function OrderStatusWorkflow({ orderId, currentStatus, onStatusUpdate }: Props) {
@@ -54,21 +54,21 @@ export default function OrderStatusWorkflow({ orderId, currentStatus, onStatusUp
             name: 'Pending',
             icon: Clock,
             color: 'gray',
-            description: 'Order received, awaiting processing',
+            description: 'Porudžbina primljena, čeka se procesiranje',
             nextActions: ['Processing', 'Cancelled']
         },
         {
             name: 'Processing',
             icon: Package,
             color: 'yellow',
-            description: 'Order is being prepared for shipment',
+            description: 'Porudžbina se priprema za slanje',
             nextActions: ['Shipped', 'Cancelled']
         },
         {
             name: 'Shipped',
             icon: Truck,
             color: 'blue',
-            description: 'Order has been shipped to customer',
+            description: 'Porudžbina je poslata',
             nextActions: ['Delivered', 'Cancelled'],
             requiresTracking: true
         },
@@ -76,14 +76,14 @@ export default function OrderStatusWorkflow({ orderId, currentStatus, onStatusUp
             name: 'Delivered',
             icon: CheckCircle,
             color: 'green',
-            description: 'Order successfully delivered to customer',
+            description: 'Porudžbina uspešno dostavljena',
             nextActions: []
         },
         {
             name: 'Cancelled',
             icon: XCircle,
             color: 'red',
-            description: 'Order has been cancelled',
+            description: 'Porudžbina je otkazana',
             nextActions: []
         }
     ];
@@ -108,7 +108,8 @@ export default function OrderStatusWorkflow({ orderId, currentStatus, onStatusUp
                 sendCustomerEmail
             });
 
-            onStatusUpdate(selectedStatus);
+            // Notify parent component to refresh its state
+            await onStatusUpdate();
 
             if (sendCustomerEmail) {
                 toast.success(`Order status updated and customer notified`);
@@ -153,10 +154,10 @@ export default function OrderStatusWorkflow({ orderId, currentStatus, onStatusUp
     return (
         <div className="bg-white rounded-lg shadow-md p-6">
             <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-semibold text-gray-900">Order Status Workflow</h3>
+                <h3 className="text-lg font-semibold text-gray-900">Tok statusa porudžbine</h3>
                 <button
                     onClick={() => setShowStatusHistory(!showStatusHistory)}
-                    className="flex items-center text-sm text-indigo-600 hover:text-indigo-700"
+                    className="flex items-center text-sm text-brown hover:text-dark-grey"
                 >
                     <Eye className="w-4 h-4 mr-1" />
                     View History
@@ -166,7 +167,7 @@ export default function OrderStatusWorkflow({ orderId, currentStatus, onStatusUp
             {/* Current Status */}
             <div className="mb-6">
                 <div className="flex items-center space-x-3 mb-2">
-                    <span className="text-sm font-medium text-gray-700">Current Status:</span>
+                    <span className="text-sm font-medium text-gray-700">Trenutni status:</span>
                     <div className={`flex items-center px-3 py-1 rounded-lg border ${getStatusColor(currentStatus)}`}>
                         {(() => {
                             const Icon = statusFlow.find(s => s.name === currentStatus)?.icon;
@@ -195,7 +196,7 @@ export default function OrderStatusWorkflow({ orderId, currentStatus, onStatusUp
                                     isCancelled
                                         ? 'bg-gray-100 border-gray-300 text-gray-400'
                                         : isCurrent
-                                            ? 'bg-indigo-100 border-indigo-500 text-indigo-600'
+                                            ? 'bg-white border-brown text-dark-grey'
                                             : isCompleted
                                                 ? 'bg-green-100 border-green-500 text-green-600'
                                                 : 'bg-gray-100 border-gray-300 text-gray-400'
@@ -227,17 +228,17 @@ export default function OrderStatusWorkflow({ orderId, currentStatus, onStatusUp
             {/* Status Update Form */}
             {currentStatus !== 'Delivered' && currentStatus !== 'Cancelled' && (
                 <div className="border-t pt-6">
-                    <h4 className="text-md font-medium text-gray-900 mb-4">Update Order Status</h4>
+                    <h4 className="text-md font-medium text-gray-900 mb-4">Ažuriraj status</h4>
 
                     {/* Status Selection */}
                     <div className="mb-4">
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                            New Status
+                            Novi status
                         </label>
                         <select
                             value={selectedStatus}
                             onChange={(e) => setSelectedStatus(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-light-grey focus:border-transparent"
                         >
                             <option value={currentStatus}>{currentStatus} (Current)</option>
                             {statusFlow
@@ -255,13 +256,13 @@ export default function OrderStatusWorkflow({ orderId, currentStatus, onStatusUp
                     {selectedStatusData?.requiresTracking && (
                         <div className="mb-4">
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Tracking Number *
+                                Broj za praćenje *
                             </label>
                             <input
                                 type="text"
                                 value={trackingNumber}
                                 onChange={(e) => setTrackingNumber(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-light-grey focus:border-transparent"
                                 placeholder="Enter tracking number"
                                 required
                             />
@@ -271,14 +272,14 @@ export default function OrderStatusWorkflow({ orderId, currentStatus, onStatusUp
                     {/* Status Notes */}
                     <div className="mb-4">
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Notes (Optional)
+                            Beleške (Opciono)
                         </label>
                         <textarea
                             value={statusNotes}
                             onChange={(e) => setStatusNotes(e.target.value)}
                             rows={3}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                            placeholder="Add notes about this status change..."
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-light-grey focus:border-transparent"
+                            placeholder="Dodaj beleške o promeni statusa..."
                         />
                     </div>
 
@@ -289,9 +290,9 @@ export default function OrderStatusWorkflow({ orderId, currentStatus, onStatusUp
                                 type="checkbox"
                                 checked={sendCustomerEmail}
                                 onChange={(e) => setSendCustomerEmail(e.target.checked)}
-                                className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                className="rounded border-gray-300 text-brown focus:ring-light-grey"
                             />
-                            <span className="text-sm text-gray-700">Send email notification to customer</span>
+                            <span className="text-sm text-gray-700">Pošalji email sa obaveštenjem kupcu</span>
                         </label>
                     </div>
 
@@ -302,18 +303,18 @@ export default function OrderStatusWorkflow({ orderId, currentStatus, onStatusUp
                         className={`w-full flex items-center justify-center px-4 py-2 rounded-lg transition-colors ${
                             isUpdating || selectedStatus === currentStatus
                                 ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                                : 'bg-brown text-white hover:bg-dark-grey'
                         }`}
                     >
                         {isUpdating ? (
                             <>
                                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                Updating...
+                                Ažuriranje...
                             </>
                         ) : (
                             <>
                                 <Mail className="w-4 h-4 mr-2" />
-                                Update Status
+                                Ažuriraj status
                             </>
                         )}
                     </button>
@@ -323,15 +324,15 @@ export default function OrderStatusWorkflow({ orderId, currentStatus, onStatusUp
             {/* Status History */}
             {showStatusHistory && (
                 <div className="border-t pt-6 mt-6">
-                    <h4 className="text-md font-medium text-gray-900 mb-4">Status History</h4>
+                    <h4 className="text-md font-medium text-gray-900 mb-4">Istorija statusa</h4>
                     {loadingHistory ? (
                         <div className="text-center py-6">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
-                            <p className="text-sm text-gray-500 mt-2">Loading history...</p>
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brown mx-auto"></div>
+                            <p className="text-sm text-gray-500 mt-2">Učitavanje istorije...</p>
                         </div>
                     ) : statusHistory.length === 0 ? (
                         <div className="text-center py-6">
-                            <p className="text-sm text-gray-500">No status history available</p>
+                            <p className="text-sm text-gray-500">Nema dostupne istorije statusa</p>
                         </div>
                     ) : (
                     <div className="space-y-3">
@@ -355,11 +356,11 @@ export default function OrderStatusWorkflow({ orderId, currentStatus, onStatusUp
                                     )}
                                     {entry.trackingNumber && (
                                         <p className="text-sm text-blue-600 mt-1">
-                                            Tracking: {entry.trackingNumber}
+                                            Praćenje: {entry.trackingNumber}
                                         </p>
                                     )}
                                     <p className="text-xs text-gray-500 mt-1">
-                                        Updated by: {entry.updatedBy}
+                                        Ažurirao: {entry.updatedBy}
                                     </p>
                                 </div>
                             </div>

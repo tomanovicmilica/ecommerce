@@ -82,16 +82,21 @@ export const basketSlice = createSlice({
 });
         builder.addCase(removeBasketItemAsync.fulfilled, (state, action) => {
     const { productId, attributeValueIds, quantity } = action.meta.arg;
-    const itemIndex = state.basket?.items.findIndex(i =>
-        i.productId === productId &&
-        (
-            // Try to match by attributeValueIds first
-            (attributeValueIds?.length && i.attributeValueIds?.length &&
-             JSON.stringify(i.attributeValueIds.sort()) === JSON.stringify(attributeValueIds.sort())) ||
-            // Fallback: if both have empty/undefined attributeValueIds, they match
-            (!attributeValueIds?.length && !i.attributeValueIds?.length)
-        )
-    );
+    const itemIndex = state.basket?.items.findIndex(i => {
+        if (i.productId !== productId) return false;
+
+        // Match by attributeValueIds
+        if (attributeValueIds?.length && i.attributeValueIds?.length) {
+            // Create sorted copies instead of mutating
+            const sortedItemIds = [...i.attributeValueIds].sort();
+            const sortedArgIds = [...attributeValueIds].sort();
+            return JSON.stringify(sortedItemIds) === JSON.stringify(sortedArgIds);
+        }
+
+        // Fallback: if both have empty/undefined attributeValueIds, they match
+        return !attributeValueIds?.length && !i.attributeValueIds?.length;
+    });
+
     if (itemIndex === -1 || itemIndex === undefined) return;
     state.basket!.items[itemIndex].quantity -= quantity;
     if (state.basket!.items[itemIndex].quantity <= 0)

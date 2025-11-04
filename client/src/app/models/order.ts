@@ -1,17 +1,22 @@
 import type { DigitalDownload } from './digitalDownload';
 
+export interface OrderItemAttribute {
+  orderItemAttributeId: number;
+  attributeName: string;
+  attributeValue: string;
+}
+
 export interface OrderItem {
+  orderItemId: number;
   productId: number;
-  name: string;
-  price: number;
-  quantity: number;
   productVariantId?: number;
-  attributes?: { attributeName: string; attributeValue: string }[];
-  attributeValueIds?: number[];
-  productType: number;
-  digitalFileUrl?: string;
-  isInstantDelivery?: boolean;
-  imageUrl?: string;
+  productName: string;
+  productDescription?: string;
+  unitPrice: number;
+  quantity: number;
+  lineTotal: number;
+  productImageUrl?: string;
+  attributes: OrderItemAttribute[];
 }
 
 export interface OrderStatusHistory {
@@ -25,29 +30,49 @@ export interface OrderStatusHistory {
 
 export interface Order {
   orderId: number;
+  orderNumber: string;
+  userId?: number;
+  buyerEmail: string;
   orderDate: string;
   orderStatus: 'Pending' | 'Processing' | 'Shipped' | 'Delivered' | 'Cancelled';
-  items: OrderItem[];
+  orderItems: OrderItem[];
   subtotal: number;
-  deliveryFee: number;
-  total: number;
+  taxAmount: number;
+  shippingCost: number;
+  totalAmount: number;
+  currency: string;
+  paymentIntentId?: string;
+  paymentStatus: string;
   shippingAddress: Address;
-  paymentMethod?: string;
+  billingAddress?: Address;
+  createdAt: string;
+  updatedAt: string;
+  notes?: string;
+  trackingNumber?: string;
+  // Legacy/optional fields for backward compatibility
   hasDigitalItems?: boolean;
   digitalDownloads?: DigitalDownload[];
-  trackingNumber?: string;
   statusHistory?: OrderStatusHistory[];
 }
 
 export interface Address {
+  orderAddressId?: number;
+  userId?: number;
   firstName: string;
   lastName: string;
-  address1: string;
-  address2?: string;
+  company?: string;
+  addressLine1: string;
+  addressLine2?: string;
   city: string;
   state: string;
-  zip: string;
+  postalCode: string;
   country: string;
+  phoneNumber?: string;
+  isDefault?: boolean;
+  addressType?: string;
+  // Legacy fields for backward compatibility
+  address1?: string;
+  zip?: string;
 }
 
 export interface OrderFormData {

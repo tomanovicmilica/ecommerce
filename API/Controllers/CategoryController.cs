@@ -106,7 +106,7 @@ namespace API.Controllers
             var categories = await _context.Categories!
                 .Select(c => new
                 {
-                    Id = c.CategoryId,
+                    CategoryId = c.CategoryId,
                     c.Name,
                     Description = (string?)null, // Category doesn't have Description property
                     ProductCount = _context.Products!.Count(p => p.CategoryId == c.CategoryId),

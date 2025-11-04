@@ -93,7 +93,7 @@ export default function AttributeManagement() {
 
     const handleDeleteAttribute = async (attributeId: number) => {
         try {
-            await (agent.Admin as any).deleteAttribute(attributeId);
+            await agent.Admin.deleteAttribute(attributeId);
             toast.success('Atribut uspešno obrisan');
             fetchAttributes();
         } catch (error) {
@@ -104,7 +104,7 @@ export default function AttributeManagement() {
 
     const handleDeleteValue = async (attributeId: number, valueId: number) => {
         try {
-            await (agent.Admin as any).deleteAttributeValue(attributeId, valueId);
+            await agent.Admin.deleteAttributeValue(attributeId, valueId);
             toast.success('Vrednost uspešno obrisana');
             fetchAttributes();
         } catch (error) {
@@ -120,7 +120,7 @@ export default function AttributeManagement() {
         }
 
         try {
-            await (agent.Admin as any).updateAttribute(editingAttribute.id, {
+            await agent.Admin.updateAttribute(editingAttribute.id, {
                 name: editingAttribute.name,
                 type: editingAttribute.type
             });
@@ -286,7 +286,7 @@ export default function AttributeManagement() {
                         <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
                             <div className="p-6">
                                 <div className="flex justify-between items-center mb-4">
-                                    <h3 className="text-lg font-semibold text-gray-900">Create New Attribute</h3>
+                                    <h3 className="text-lg font-semibold text-gray-900">Kreiraj novi atribut</h3>
                                     <button
                                         onClick={() => {
                                             setShowCreateModal(false);
@@ -308,7 +308,7 @@ export default function AttributeManagement() {
                                             value={newAttribute.name}
                                             onChange={(e) => setNewAttribute(prev => ({ ...prev, name: e.target.value }))}
                                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-light-grey focus:border-transparent"
-                                            placeholder="e.g., Size, Color, Material"
+                                            placeholder="e.g., Veličina, Boja, Materijal"
                                         />
                                     </div>
 
@@ -322,9 +322,9 @@ export default function AttributeManagement() {
                                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-light-grey focus:border-transparent"
                                         >
                                             <option value="text">Text</option>
-                                            <option value="color">Color</option>
-                                            <option value="size">Size</option>
-                                            <option value="material">Material</option>
+                                            <option value="color">Boja</option>
+                                            <option value="size">Veličina</option>
+                                            <option value="material">Materijal</option>
                                         </select>
                                     </div>
                                 </div>
@@ -337,7 +337,7 @@ export default function AttributeManagement() {
                                         }}
                                         className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
                                     >
-                                        Cancel
+                                        Poništi
                                     </button>
                                     <button
                                         onClick={handleCreateAttribute}
@@ -380,7 +380,7 @@ export default function AttributeManagement() {
                                                 name: e.target.value
                                             })}
                                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-light-grey focus:border-transparent"
-                                            placeholder="e.g., Size, Color, Material"
+                                            placeholder="npr. Veličina, Boja, Materijal"
                                         />
                                     </div>
 
@@ -397,9 +397,9 @@ export default function AttributeManagement() {
                                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-light-grey focus:border-transparent"
                                         >
                                             <option value="text">Text</option>
-                                            <option value="color">Color</option>
-                                            <option value="size">Size</option>
-                                            <option value="material">Material</option>
+                                            <option value="color">Boja</option>
+                                            <option value="size">Veličina</option>
+                                            <option value="material">Materijal</option>
                                         </select>
                                     </div>
                                 </div>
@@ -409,7 +409,7 @@ export default function AttributeManagement() {
                                         onClick={() => setEditingAttribute(null)}
                                         className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
                                     >
-                                        Cancel
+                                        Poništi
                                     </button>
                                     <button
                                         onClick={handleUpdateAttribute}

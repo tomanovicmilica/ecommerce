@@ -33,7 +33,7 @@ type ProductFormData = z.infer<typeof productSchema>;
 
 interface Props {
     product?: Product;
-    onSubmit: (data: ProductFormData & { images: File[], variants: ProductVariant[] }) => void;
+    onSubmit: (data: ProductFormData & { images: File[], variants: ProductVariant[], digitalFile: File | null }) => void;
     onCancel: () => void;
     loading?: boolean;
 }
@@ -44,6 +44,7 @@ export default function ProductForm({ product, onSubmit, onCancel, loading = fal
     const [categories, setCategories] = useState<Category[]>([]);
     const [variants, setVariants] = useState<ProductVariant[]>([]);
     const [attributes, setAttributes] = useState<Attribute[]>([]);
+    const [digitalFile, setDigitalFile] = useState<File | null>(null);
 
     const {
         register,
@@ -57,7 +58,7 @@ export default function ProductForm({ product, onSubmit, onCancel, loading = fal
             name: product.name,
             description: product.description,
             price: product.price,
-            categoryId: product.categoryId,
+            categoryId: product.categoryId || 0,
             productType: product.productType || 0,
             digitalFileUrl: product.digitalFileUrl || '',
             isInstantDelivery: product.isInstantDelivery || false,
@@ -81,6 +82,11 @@ export default function ProductForm({ product, onSubmit, onCancel, loading = fal
                 const response = await agent.Admin.getCategories();
                 console.log('Categories loaded:', response);
                 setCategories(response);
+
+                // If editing a product and categoryId is valid, ensure it's set
+                if (product && product.categoryId) {
+                    setValue('categoryId', product.categoryId);
+                }
             } catch (error) {
                 console.error('Failed to fetch categories:', error);
             }
@@ -102,7 +108,7 @@ export default function ProductForm({ product, onSubmit, onCancel, loading = fal
         if (product?.variants) {
             setVariants(product.variants);
         }
-    }, [product]);
+    }, [product, setValue]);
 
     const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(event.target.files || []);
@@ -123,6 +129,19 @@ export default function ProductForm({ product, onSubmit, onCancel, loading = fal
     const removeImage = (index: number) => {
         setSelectedImages(prev => prev.filter((_, i) => i !== index));
         setImagePreviews(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const handleDigitalFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (file) {
+            setDigitalFile(file);
+            // Optionally upload to Cloudinary immediately and get URL
+            // For now, we'll just store the file
+        }
+    };
+
+    const removeDigitalFile = () => {
+        setDigitalFile(null);
     };
 
     const addVariant = () => {
@@ -197,7 +216,7 @@ export default function ProductForm({ product, onSubmit, onCancel, loading = fal
     };
 
     const onFormSubmit = (data: ProductFormData) => {
-        onSubmit({ ...data, images: selectedImages, variants });
+        onSubmit({ ...data, images: selectedImages, variants, digitalFile });
     };
 
     return (
@@ -212,7 +231,7 @@ export default function ProductForm({ product, onSubmit, onCancel, loading = fal
                         <ArrowLeft className="w-5 h-5" />
                     </button>
                     <h1 className="text-3xl font-bold text-gray-900">
-                        {product ? 'Edit Product' : 'Add New Product'}
+                        {product ? 'Ažuriraj proizvod' : 'Dodaj novi proizvod'}
                     </h1>
                 </div>
             </div>
@@ -220,18 +239,18 @@ export default function ProductForm({ product, onSubmit, onCancel, loading = fal
             <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-8">
                 {/* Basic Information */}
                 <div className="bg-white rounded-lg shadow-md p-6">
-                    <h2 className="text-xl font-semibold text-gray-900 mb-6">Basic Information</h2>
+                    <h2 className="text-xl font-semibold text-gray-900 mb-6">Osnovne informacije</h2>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Product Name *
+                                Naziv proizvoda *
                             </label>
                             <input
                                 {...register('name')}
                                 type="text"
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                                placeholder="Enter product name"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-light-grey focus:border-transparent"
+                                placeholder="Upiši naziv proizvoda"
                             />
                             {errors.name && (
                                 <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>
@@ -240,16 +259,16 @@ export default function ProductForm({ product, onSubmit, onCancel, loading = fal
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Base Price *
+                                Osnovna cena *
                             </label>
                             <div className="relative">
-                                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                                <span className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-500 text-xs">rsd</span>
                                 <input
                                     {...register('price', { valueAsNumber: true })}
                                     type="number"
                                     step="0.01"
                                     min="0"
-                                    className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                    className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-light-grey focus:border-transparent"
                                     placeholder="0.00"
                                 />
                             </div>
@@ -260,13 +279,13 @@ export default function ProductForm({ product, onSubmit, onCancel, loading = fal
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Category *
+                                Kategorija *
                             </label>
                             <select
                                 {...register('categoryId', { valueAsNumber: true })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-light-grey focus:border-transparent"
                             >
-                                <option key="default" value={0}>Select category</option>
+                                <option key="default" value={0}>Odaberi kategoriju</option>
                                 {categories.map((category, index) => (
                                     <option key={`category-${category.categoryId || index}`} value={category.categoryId}>
                                         {category.name}
@@ -280,14 +299,14 @@ export default function ProductForm({ product, onSubmit, onCancel, loading = fal
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Product Type *
+                                Tip proizvoda *
                             </label>
                             <select
                                 {...register('productType', { valueAsNumber: true })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-light-grey focus:border-transparent"
                             >
-                                <option value={0}>Physical Product</option>
-                                <option value={1}>Digital Product</option>
+                                <option value={0}>Fizički</option>
+                                <option value={1}>Digitalni</option>
                             </select>
                             {errors.productType && (
                                 <p className="mt-1 text-sm text-red-600">{errors.productType.message}</p>
@@ -297,29 +316,121 @@ export default function ProductForm({ product, onSubmit, onCancel, loading = fal
                         {/* Digital Product Fields - Only show for digital products */}
                         {selectedProductType === 1 && (
                             <>
-                                <div>
+                                <div className="md:col-span-2">
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Digital File URL
+                                        Digitalni fajl
                                     </label>
-                                    <input
-                                        {...register('digitalFileUrl')}
-                                        type="url"
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                                        placeholder="https://example.com/download-link"
-                                    />
-                                    <p className="mt-1 text-xs text-gray-500">
-                                        URL where customers can download the digital product
-                                    </p>
+
+                                    {/* Show existing digital file URL if product is being edited */}
+                                    {!digitalFile && watch('digitalFileUrl') ? (
+                                        <div className="space-y-3">
+                                            <div className="flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                                <div className="flex items-center flex-1 min-w-0">
+                                                    <svg className="w-5 h-5 text-blue-600 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                                        <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
+                                                    </svg>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-sm font-medium text-gray-900">Trenutni fajl:</p>
+                                                        <p className="text-xs text-gray-600 truncate" title={watch('digitalFileUrl')}>
+                                                            {watch('digitalFileUrl')}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <a
+                                                    href={watch('digitalFileUrl')}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="ml-2 p-1 text-blue-600 hover:text-blue-700 transition-colors flex-shrink-0"
+                                                    title="Otvori fajl"
+                                                >
+                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                                    </svg>
+                                                </a>
+                                            </div>
+                                            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-gray-400 transition-colors">
+                                                <input
+                                                    type="file"
+                                                    onChange={handleDigitalFileSelect}
+                                                    className="hidden"
+                                                    id="digital-file-upload"
+                                                    accept=".pdf,.zip,.rar,.doc,.docx,.txt,.mp3,.mp4,.avi,.mov"
+                                                />
+                                                <label htmlFor="digital-file-upload" className="cursor-pointer">
+                                                    <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                                                    <p className="text-sm font-medium text-gray-900">Zameni digitalni fajl</p>
+                                                    <p className="text-xs text-gray-500 mt-1">Postavi novi fajl da zamenite postojeći</p>
+                                                    <button
+                                                        type="button"
+                                                        className="mt-2 inline-flex items-center px-3 py-1.5 bg-brown text-white text-sm rounded-lg hover:bg-dark-grey transition-colors"
+                                                    >
+                                                        Izaberi novi fajl
+                                                    </button>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    ) : !digitalFile ? (
+                                        <>
+                                            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-gray-400 transition-colors">
+                                                <input
+                                                    type="file"
+                                                    onChange={handleDigitalFileSelect}
+                                                    className="hidden"
+                                                    id="digital-file-upload"
+                                                    accept=".pdf,.zip,.rar,.doc,.docx,.txt,.mp3,.mp4,.avi,.mov"
+                                                />
+                                                <label htmlFor="digital-file-upload" className="cursor-pointer">
+                                                    <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                                                    <p className="text-sm font-medium text-gray-900">Postavi digitalni fajl</p>
+                                                    <p className="text-xs text-gray-500 mt-1">PDF, ZIP, DOC, Audio, Video fajlovi</p>
+                                                    <button
+                                                        type="button"
+                                                        className="mt-2 inline-flex items-center px-3 py-1.5 bg-brown text-white text-sm rounded-lg hover:bg-dark-grey transition-colors"
+                                                    >
+                                                        Izaberi fajl
+                                                    </button>
+                                                </label>
+                                            </div>
+                                            <p className="mt-2 text-xs text-gray-500">
+                                                Ili unesite URL ako je fajl već postavljen negde:
+                                            </p>
+                                            <input
+                                                {...register('digitalFileUrl')}
+                                                type="url"
+                                                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-light-grey focus:border-transparent text-sm"
+                                                placeholder="https://example.com/download-link"
+                                            />
+                                        </>
+                                    ) : (
+                                        <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
+                                            <div className="flex items-center">
+                                                <svg className="w-5 h-5 text-green-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
+                                                </svg>
+                                                <div>
+                                                    <p className="text-sm font-medium text-gray-900">{digitalFile.name}</p>
+                                                    <p className="text-xs text-gray-500">{(digitalFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                                                </div>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={removeDigitalFile}
+                                                className="p-1 text-red-600 hover:text-red-700 transition-colors"
+                                            >
+                                                <X className="w-5 h-5" />
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
 
-                                <div className="flex items-center">
+                                <div className="md:col-span-2 flex items-center">
                                     <input
                                         {...register('isInstantDelivery')}
                                         type="checkbox"
-                                        className="rounded border-gray-300 text-indigo-600 mr-2"
+                                        className="rounded border-gray-300 text-brown mr-2"
                                     />
                                     <label className="text-sm font-medium text-gray-700">
-                                        Enable instant delivery after payment
+                                        Dozvoli instant preuzimanje nakon plaćanja
                                     </label>
                                 </div>
                             </>
@@ -327,13 +438,13 @@ export default function ProductForm({ product, onSubmit, onCancel, loading = fal
 
                         <div className="md:col-span-2">
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Description *
+                                Opis *
                             </label>
                             <textarea
                                 {...register('description')}
                                 rows={4}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                                placeholder="Enter product description"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-light-grey focus:border-transparent"
+                                placeholder="Upiši opis proizvoda"
                             />
                             {errors.description && (
                                 <p className="mt-1 text-sm text-red-600">{errors.description.message}</p>
@@ -344,7 +455,7 @@ export default function ProductForm({ product, onSubmit, onCancel, loading = fal
 
                 {/* Product Images */}
                 <div className="bg-white rounded-lg shadow-md p-6">
-                    <h2 className="text-xl font-semibold text-gray-900 mb-6">Product Images</h2>
+                    <h2 className="text-xl font-semibold text-gray-900 mb-6">Slike proizvoda</h2>
 
                     <div className="space-y-4">
                         {/* Upload Area */}
@@ -359,13 +470,13 @@ export default function ProductForm({ product, onSubmit, onCancel, loading = fal
                             />
                             <label htmlFor="image-upload" className="cursor-pointer">
                                 <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                                <p className="text-lg font-medium text-gray-900">Upload product images</p>
-                                <p className="text-sm text-gray-500">PNG, JPG, GIF up to 10MB</p>
+                                <p className="text-lg font-medium text-gray-900">Dodaj slike proizvoda</p>
+                                <p className="text-sm text-gray-500">PNG, JPG, GIF do 10MB</p>
                                 <button
                                     type="button"
-                                    className="mt-4 inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                                    className="mt-4 inline-flex items-center px-4 py-2 bg-brown text-white rounded-lg hover:bg-dark-grey transition-colors"
                                 >
-                                    Choose Files
+                                    Izaberi fajlove
                                 </button>
                             </label>
                         </div>
@@ -397,37 +508,37 @@ export default function ProductForm({ product, onSubmit, onCancel, loading = fal
                 {/* Product Variants */}
                 <div className="bg-white rounded-lg shadow-md p-6">
                     <div className="flex justify-between items-center mb-4">
-                        <h2 className="text-xl font-semibold text-gray-900">Product Variants</h2>
+                        <h2 className="text-xl font-semibold text-gray-900">Varijante</h2>
                         <button
                             type="button"
                             onClick={addVariant}
-                            className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                            className="inline-flex items-center px-4 py-2 bg-brown text-white rounded-lg hover:bg-dark-grey transition-colors"
                         >
                             <Plus className="w-4 h-4 mr-2" />
-                            Add Variant
+                            Dodaj varijantu
                         </button>
                     </div>
 
                     {/* Helpful note based on product type */}
-                    <div className="mb-6 p-3 bg-blue-50 border-l-4 border-blue-400 rounded">
-                        <p className="text-sm text-blue-800">
+                    <div className="mb-6 p-3 bg-gray-50 border-l-4 border-beige rounded">
+                        <p className="text-sm text-dark-grey">
                             {selectedProductType === 1
-                                ? "💾 Digital products: Create variants for different license types, subscription periods, or feature tiers (e.g., Basic, Pro, Enterprise)."
-                                : "📦 Physical products: Create variants for different sizes, colors, materials, or other physical attributes."
+                                ? "Digitalni proizvodi: Kreiraj varijante za drugačije tipove licenci, periode pretplate, ili drugačije funkcionalnosti."
+                                : "Fizički proizvodi: Kreiraj varijante za različite veličine, boje, materijale, ili druge fizičke atribute."
                             }
                         </p>
                     </div>
 
                     {variants.length === 0 ? (
                         <div className="text-center py-8 text-gray-500">
-                            <p>No variants added yet. Click "Add Variant" to create product variations.</p>
+                            <p>Nema varijanti. Idi na "Dodaj varijantu" da kreiraš varijante proizvoda.</p>
                         </div>
                     ) : (
                         <div className="space-y-4">
                             {variants.map((variant, index) => (
                                 <div key={index} className="border border-gray-200 rounded-lg p-4">
                                     <div className="flex justify-between items-start mb-4">
-                                        <h3 className="text-lg font-medium text-gray-900">Variant {index + 1}</h3>
+                                        <h3 className="text-lg font-medium text-gray-900">Varijanta {index + 1}</h3>
                                         <button
                                             type="button"
                                             onClick={() => removeVariant(index)}
@@ -440,17 +551,25 @@ export default function ProductForm({ product, onSubmit, onCancel, loading = fal
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                Price Override
+                                                Nova cena (osnovna: {watch('price')})
                                             </label>
                                             <div className="relative">
-                                                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                                                <span className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-500 text-xs">rsd</span>
                                                 <input
                                                     type="number"
                                                     step="0.01"
                                                     min="0"
-                                                    value={variant.price}
-                                                    onChange={(e) => updateVariant(index, 'price', parseFloat(e.target.value) || 0)}
-                                                    className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                                    value={variant.priceOverride ?? variant.price ?? watch('price')}
+                                                    onChange={(e) => {
+                                                        const newPrice = parseFloat(e.target.value);
+                                                        const basePrice = watch('price');
+                                                        // If the new price equals base price, set priceOverride to null
+                                                        // Otherwise, set it to the new price
+                                                        const priceOverride = newPrice === basePrice ? null : newPrice;
+                                                        updateVariant(index, 'priceOverride', priceOverride);
+                                                        updateVariant(index, 'price', newPrice || basePrice);
+                                                    }}
+                                                    className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-light-grey focus:border-transparent"
                                                     placeholder="0.00"
                                                 />
                                             </div>
@@ -458,21 +577,21 @@ export default function ProductForm({ product, onSubmit, onCancel, loading = fal
 
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                Stock Quantity
+                                                Količina na stanju
                                             </label>
                                             <input
                                                 type="number"
                                                 min="0"
                                                 value={variant.quantityInStock}
                                                 onChange={(e) => updateVariant(index, 'quantityInStock', parseInt(e.target.value) || 0)}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-light-grey focus:border-transparent"
                                                 placeholder="0"
                                             />
                                         </div>
 
                                         <div className="md:col-span-2">
                                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                Attributes
+                                                Atributi
                                             </label>
                                             <div className="space-y-4">
                                                 {attributes.map(attribute => (
@@ -488,7 +607,7 @@ export default function ProductForm({ product, onSubmit, onCancel, loading = fal
                                                                     onClick={() => toggleAttributeValue(index, attribute.id, value.id)}
                                                                     className={`px-3 py-2 text-sm rounded-lg border transition-colors ${
                                                                         isAttributeValueSelected(index, value.id)
-                                                                            ? 'bg-indigo-600 text-white border-indigo-600'
+                                                                            ? 'bg-brown text-white border-dark-grey'
                                                                             : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
                                                                     }`}
                                                                 >
@@ -500,17 +619,17 @@ export default function ProductForm({ product, onSubmit, onCancel, loading = fal
                                                 ))}
                                                 {attributes.length === 0 && (
                                                     <p className="text-sm text-gray-500">
-                                                        No attributes available. Create attributes first in the Attributes section.
+                                                        Nema dostupnih atributa.Kreiraj atribute prvo u sekciji atributa.
                                                     </p>
                                                 )}
                                                 {variant.attributes && variant.attributes.length > 0 && (
                                                     <div className="mt-3 p-3 bg-gray-50 rounded-lg">
-                                                        <p className="text-sm font-medium text-gray-700 mb-2">Selected:</p>
+                                                        <p className="text-sm font-medium text-gray-700 mb-2">Selektovano:</p>
                                                         <div className="flex flex-wrap gap-2">
                                                             {variant.attributes.map((attr, attrIndex) => (
                                                                 <span
                                                                     key={`${attr.attributeName}-${attr.attributeValue}-${attrIndex}`}
-                                                                    className="inline-flex items-center px-2 py-1 text-xs bg-indigo-100 text-indigo-800 rounded-full"
+                                                                    className="inline-flex items-center px-2 py-1 text-xs bg-white text-dark-grey rounded-full"
                                                                 >
                                                                     {attr.attributeName}: {attr.attributeValue}
                                                                 </span>
@@ -535,14 +654,14 @@ export default function ProductForm({ product, onSubmit, onCancel, loading = fal
                         onClick={onCancel}
                         className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                     >
-                        Cancel
+                        Poništi
                     </button>
                     <button
                         type="submit"
                         disabled={loading}
-                        className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-indigo-300 disabled:cursor-not-allowed transition-colors"
+                        className="px-6 py-2 bg-brown text-white rounded-lg hover:bg-dark-grey disabled:bg-light-grey disabled:cursor-not-allowed transition-colors"
                     >
-                        {loading ? 'Saving...' : product ? 'Update Product' : 'Create Product'}
+                        {loading ? 'Saving...' : product ? 'Ažuriraj proizvod' : 'Kreiraj proizvod'}
                     </button>
                 </div>
             </form>

@@ -20,6 +20,10 @@ export default function HomePage() {
       'majice' : '/images/products/shirt.jpg',
       'privesci': '/images/products/charm.jpg',
       'category-torbe': '/images/products/bags.jpg',
+      'vez': '/images/products/vez.jpg',
+      'posteri': '/images/products/wallart.jpg',
+      'planeri': '/images/products/planner.jpg',
+      'minđuše': '/images/products/earrings.jpg',
       'default': 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=300&h=400&fit=crop'
     };
 

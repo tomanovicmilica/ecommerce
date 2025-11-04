@@ -9,7 +9,8 @@ import AdminLayout from '../layout/AdminLayout';
 import agent from '../../../app/api/agent';
 import { toast } from 'react-toastify';
 import BulkActions, { orderBulkActions } from '../components/BulkActions';
-import ExportManager, { generateCSV, downloadFile } from '../components/ExportManager';
+import ExportManager, { generateCSV, generateXLSX, downloadFile } from '../components/ExportManager';
+import BulkOrderStatusModal from './BulkOrderStatusModal';
 
 interface AdminOrder extends Order {
     customerName: string;
@@ -25,6 +26,7 @@ export default function OrderManagement() {
     const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
     const [selectedOrders, setSelectedOrders] = useState<number[]>([]);
     const [showExportModal, setShowExportModal] = useState(false);
+    const [showBulkStatusModal, setShowBulkStatusModal] = useState(false);
 
     useEffect(() => {
         fetchOrders();
@@ -45,15 +47,27 @@ export default function OrderManagement() {
             // Transform orders to include admin-specific fields
             const adminOrders: AdminOrder[] = response.map((order: any) => ({
                 orderId: order.orderId,
+                orderNumber: order.orderNumber || `ORD-${order.orderId}`,
+                userId: order.userId,
+                buyerEmail: order.buyerEmail || order.customerEmail || 'N/A',
                 orderDate: order.orderDate,
                 orderStatus: order.orderStatus,
-                items: order.items || [],
+                orderItems: order.items || order.orderItems || [],
                 subtotal: order.subtotal,
-                deliveryFee: order.deliveryFee || 0,
-                total: order.total,
+                taxAmount: order.taxAmount || 0,
+                shippingCost: order.deliveryFee || order.shippingCost || 0,
+                totalAmount: order.total || order.totalAmount,
+                currency: order.currency || 'USD',
+                paymentIntentId: order.paymentIntentId,
+                paymentStatus: order.paymentStatus || 'Pending',
                 shippingAddress: order.shippingAddress,
+                billingAddress: order.billingAddress,
+                createdAt: order.createdAt || order.orderDate,
+                updatedAt: order.updatedAt || order.orderDate,
+                notes: order.notes,
+                trackingNumber: order.trackingNumber,
                 customerName: order.customerName || 'Unknown',
-                customerEmail: order.customerEmail || 'N/A'
+                customerEmail: order.customerEmail || order.buyerEmail || 'N/A'
             }));
 
             setOrders(adminOrders);
@@ -107,15 +121,11 @@ export default function OrderManagement() {
         }
     };
 
-    const updateOrderStatus = async (orderId: number, newStatus: string) => {
-        try {
-            await agent.Admin.updateOrderStatus(orderId, newStatus);
-            toast.success('Order status updated successfully');
-            fetchOrders(); // Refresh the orders list
-        } catch (error) {
-            console.error('Failed to update order status:', error);
-            toast.error('Failed to update order status');
-        }
+    const updateOrderStatus = async () => {
+        // This function is called after a status update to refresh the orders list
+        // The actual API call should be made by the calling component
+        // We just refresh the list here to show the updated data
+        await fetchOrders();
     };
 
     const handleSelectOrder = (orderId: number) => {
@@ -138,8 +148,7 @@ export default function OrderManagement() {
         try {
             switch (actionId) {
                 case 'updateStatus':
-                    // TODO: Show modal to select new status
-                    toast.info('Status update modal coming soon');
+                    setShowBulkStatusModal(true);
                     break;
 
                 case 'markShipped':
@@ -186,13 +195,13 @@ export default function OrderManagement() {
 
     const handleExport = async (exportOptions: any) => {
         try {
-            // Only support CSV export (client-side) for now
-            if (exportOptions.format !== 'csv') {
-                toast.info('Only CSV export is currently available. Excel/PDF export will be added soon.');
+            // Support CSV and XLSX export (client-side)
+            if (exportOptions.format !== 'csv' && exportOptions.format !== 'xlsx') {
+                toast.info('Only CSV and Excel export are currently available. PDF export will be added soon.');
                 return;
             }
 
-            // Generate CSV locally for immediate download
+            // Generate export data
             const ordersToExport = selectedOrders.length > 0
                 ? orders.filter(order => selectedOrders.includes(order.orderId))
                 : filteredOrders;
@@ -202,25 +211,32 @@ export default function OrderManagement() {
                 return;
             }
 
-            const csvData = ordersToExport.map(order => ({
+            const exportData = ordersToExport.map(order => ({
                 'Order ID': order.orderId,
                 'Customer Name': order.customerName,
                 'Customer Email': order.customerEmail,
                 'Order Date': new Date(order.orderDate).toLocaleDateString(),
                 'Status': order.orderStatus,
-                'Items Count': order.items.length,
+                'Items Count': order.orderItems?.length || 0,
                 'Subtotal': order.subtotal,
-                'Delivery Fee': order.deliveryFee || 0,
-                'Total': order.total,
+                'Shipping Cost': order.shippingCost || 0,
+                'Total': order.totalAmount,
                 'Shipping Address': order.shippingAddress ? `${order.shippingAddress.address1}, ${order.shippingAddress.city}` : 'N/A'
             }));
 
-            const columns = exportOptions.columns || Object.keys(csvData[0] || {});
-            const csvContent = generateCSV(csvData, columns);
+            const columns = exportOptions.columns || Object.keys(exportData[0] || {});
             const timestamp = new Date().toISOString().split('T')[0];
-            downloadFile(csvContent, `orders-export-${timestamp}.csv`, 'text/csv');
+
+            if (exportOptions.format === 'csv') {
+                const csvContent = generateCSV(exportData, columns);
+                downloadFile(csvContent, `orders-export-${timestamp}.csv`, 'text/csv');
+            } else if (exportOptions.format === 'xlsx') {
+                const filename = `orders-export-${timestamp}.xlsx`;
+                await generateXLSX(exportData, columns, filename);
+            }
 
             toast.success(`${ordersToExport.length} orders exported successfully!`);
+            setSelectedOrders([]); // Clear selection after export
         } catch (error) {
             console.error('Export failed:', error);
             toast.error('Export failed. Please try again.');
@@ -236,7 +252,17 @@ export default function OrderManagement() {
                 <OrderDetails
                     order={selectedOrder}
                     onBack={() => setSelectedOrderId(null)}
-                    onStatusUpdate={updateOrderStatus}
+                    onStatusUpdate={async () => {
+                        await updateOrderStatus();
+                        // Update the selected order with fresh data after status change
+                        const updatedOrders = await agent.Admin.getOrders();
+                        const updatedOrder = updatedOrders.find((o: any) => o.orderId === selectedOrderId);
+                        if (updatedOrder) {
+                            // OrderDetails will be re-rendered with new order data
+                            setSelectedOrderId(null);
+                            setTimeout(() => setSelectedOrderId(selectedOrderId), 0);
+                        }
+                    }}
                 />
             );
         }
@@ -262,6 +288,12 @@ export default function OrderManagement() {
         { key: 'maxAmount', label: 'Maximum Order Amount', type: 'text' as const },
         { key: 'customerName', label: 'Customer Name Contains', type: 'text' as const }
     ];
+
+    const handleBulkStatusUpdate = async (orderIds: number[], newStatus: string) => {
+        await agent.Admin.bulkUpdateOrderStatus(orderIds, newStatus);
+        await fetchOrders();
+        setSelectedOrders([]);
+    };
 
     return (
         <AdminLayout>
@@ -354,7 +386,7 @@ export default function OrderManagement() {
                 <div className="bg-white rounded-lg shadow-md p-4">
                     <h3 className="text-sm font-medium text-gray-500 mb-2">Ukupan Revenue</h3>
                     <p className="text-2xl font-bold text-green-600">
-                        {currencyFormat(orders.reduce((sum, order) => sum + order.total, 0))}
+                        {currencyFormat(orders.reduce((sum, order) => sum + (order.totalAmount || 0), 0))}
                     </p>
                 </div>
             </div>
@@ -400,8 +432,9 @@ export default function OrderManagement() {
                                         {order.orderStatus}
                                     </span>
                                     <QuickStatusButtons
+                                        orderId={order.orderId}
                                         currentStatus={order.orderStatus}
-                                        onStatusChange={(newStatus) => updateOrderStatus(order.orderId, newStatus)}
+                                        onStatusChange={updateOrderStatus}
                                     />
                                 </div>
                             </td>
@@ -415,7 +448,7 @@ export default function OrderManagement() {
                                 )}
                             </td>
                             <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                                {currencyFormat(order.total)}
+                                {currencyFormat(order.totalAmount)}
                             </td>
                             <td className="px-4 py-3">
                                 <div className="flex items-center space-x-2">
@@ -455,16 +488,33 @@ export default function OrderManagement() {
                 availableFilters={availableFilters}
             />
             </div>
+            {/* Bulk Order Status Modal */}
+            {showBulkStatusModal && (
+                <BulkOrderStatusModal
+                    orders={orders
+                        .filter(o => selectedOrders.includes(o.orderId))
+                        .map(o => ({
+                            orderId: o.orderId,
+                            customerName: o.customerName,
+                            orderStatus: o.orderStatus
+                        }))}
+                    onClose={() => setShowBulkStatusModal(false)}
+                    onUpdate={handleBulkStatusUpdate}
+                />
+            )}
         </AdminLayout>
     );
 }
 
 interface QuickStatusButtonsProps {
+    orderId: number;
     currentStatus: string;
-    onStatusChange: (newStatus: string) => void;
+    onStatusChange: () => Promise<void>;
 }
 
-function QuickStatusButtons({ currentStatus, onStatusChange }: QuickStatusButtonsProps) {
+function QuickStatusButtons({ orderId, currentStatus, onStatusChange }: QuickStatusButtonsProps) {
+    const [isUpdating, setIsUpdating] = useState(false);
+
     const getNextStatuses = (status: string): { status: string; label: string; icon: React.ReactNode; color: string }[] => {
         switch (status) {
             case 'Pending':
@@ -484,6 +534,28 @@ function QuickStatusButtons({ currentStatus, onStatusChange }: QuickStatusButton
         }
     };
 
+    const handleStatusChange = async (newStatus: string) => {
+        // Validate that Shipped status requires tracking number
+        if (newStatus === 'Shipped') {
+            toast.error('Please use the order details page to mark as shipped and add tracking number');
+            return;
+        }
+
+        setIsUpdating(true);
+        try {
+            // Make the actual API call to update status
+            await agent.Admin.updateOrderStatus(orderId, newStatus);
+            toast.success(`Order status updated to ${newStatus}`);
+            // Notify parent to refresh
+            await onStatusChange();
+        } catch (error) {
+            console.error('Failed to update status:', error);
+            toast.error('Failed to update order status');
+        } finally {
+            setIsUpdating(false);
+        }
+    };
+
     const nextStatuses = getNextStatuses(currentStatus);
 
     if (nextStatuses.length === 0) return null;
@@ -493,8 +565,9 @@ function QuickStatusButtons({ currentStatus, onStatusChange }: QuickStatusButton
             {nextStatuses.map((statusOption) => (
                 <button
                     key={statusOption.status}
-                    onClick={() => onStatusChange(statusOption.status)}
-                    className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded transition-colors ${statusOption.color}`}
+                    onClick={() => handleStatusChange(statusOption.status)}
+                    disabled={isUpdating}
+                    className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded transition-colors ${statusOption.color} disabled:opacity-50 disabled:cursor-not-allowed`}
                     title={`Mark as ${statusOption.status}`}
                 >
                     {statusOption.icon}

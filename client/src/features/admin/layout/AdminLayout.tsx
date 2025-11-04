@@ -33,7 +33,7 @@ export default function AdminLayout({ children }: Props) {
         { name: 'Porudžbine', href: '/admin/orders', icon: ShoppingCart },
         { name: 'Korisnici', href: '/admin/users', icon: Users },
         /* { name: 'Analitika', href: '/admin/analytics/sales', icon: BarChart3 }, */
-        /* { name: 'Podešavanja', href: '/admin/settings/system', icon: Settings }, */
+        /*  { name: 'Podešavanja', href: '/admin/settings/system', icon: Settings },  */
         { name: 'Roles & Permissions', href: '/admin/rbac/users', icon: Shield },
     ];
 

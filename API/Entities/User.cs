@@ -9,5 +9,7 @@ namespace API.Entities
         public string? LastName { get; set; }
 
         public UserAddress? Address { get; set; }
+
+        public List<UserAddress>? Addresses { get; set; }
     }
 }

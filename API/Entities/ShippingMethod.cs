@@ -9,5 +9,7 @@
         public int EstimatedDays { get; set; }
         public bool IsActive { get; set; }
         public decimal? FreeShipping { get; set; }
+
+        public ICollection<ShippingInfo> ShippingInfos { get; set; } = new List<ShippingInfo>();
     }
 }

@@ -91,6 +91,7 @@ yarn-error.log*
 .env.development
 .env.production
 *.env
+!.env.example
 
 # Secrets
 appsettings.Development.json
@@ -161,6 +162,22 @@ tmp/
 
 # Documentation build files
 docs/_build/
+
+# Documentation files (plans, recommendations)
+*.md
+!README.md
+
+# Digital product files (uploaded by users - should not be in git)
+API/wwwroot/digital-files/*
+# But keep the folder structure
+!API/wwwroot/digital-files/.gitkeep
+
+# React build output (built files served by API)
+API/wwwroot/assets/
+API/wwwroot/index.html
+API/wwwroot/*.ico
+API/wwwroot/*.png
+API/wwwroot/*.svg
 
 # ====================
 # Stripe & Payment

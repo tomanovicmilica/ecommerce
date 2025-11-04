@@ -7,7 +7,7 @@ export default function Review() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-semibold text-gray-900 mb-4">Order summary</h2>
+      <h2 className="text-xl font-semibold text-gray-900 mb-4">Pregled porudžbine</h2>
 
       {basket && (
         <div className="mb-6">

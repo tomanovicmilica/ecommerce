@@ -133,7 +133,7 @@ export const catalogSlice = createSlice({
         productsAdapter.setAll(state, action.payload ?? []);
         state.productsLoaded = true;
     } else {
-        state.productsLoaded = false; // ili ostavi prazno
+        state.productsLoaded = false; 
     }
     state.status = 'idle';
 });

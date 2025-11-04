@@ -77,14 +77,54 @@ namespace API.Services
                     PaymentMethodTypes = new List<string> { "card" }
                 };
                 intent = await service.CreateAsync(options);
+                basket.PaymentIntentId = intent.Id;
             }
             else
             {
-                var options = new PaymentIntentUpdateOptions
+                try
                 {
-                    Amount = (long)amount
-                };
-                intent = await service.UpdateAsync(basket.PaymentIntentId, options);
+                    // Get existing intent
+                    intent = await service.GetAsync(basket.PaymentIntentId);
+
+                    // Statuses that allow updates
+                    if (intent.Status == "requires_payment_method" ||
+                        intent.Status == "requires_confirmation" ||
+                        intent.Status == "requires_action")
+                    {
+                        var options = new PaymentIntentUpdateOptions
+                        {
+                            Amount = (long)amount
+                        };
+                        intent = await service.UpdateAsync(basket.PaymentIntentId, options);
+                    }
+                    // Statuses that require new payment intent
+                    else if (intent.Status == "succeeded" ||
+                             intent.Status == "canceled" ||
+                             intent.Status == "processing")
+                    {
+                        // Create a new payment intent
+                        var options = new PaymentIntentCreateOptions
+                        {
+                            Amount = (long)amount,
+                            Currency = "usd",
+                            PaymentMethodTypes = new List<string> { "card" }
+                        };
+                        intent = await service.CreateAsync(options);
+                        basket.PaymentIntentId = intent.Id;
+                    }
+                }
+                catch (StripeException)
+                {
+                    // If the payment intent doesn't exist or there's an error, create a new one
+                    var options = new PaymentIntentCreateOptions
+                    {
+                        Amount = (long)amount,
+                        Currency = "usd",
+                        PaymentMethodTypes = new List<string> { "card" }
+                    };
+                    intent = await service.CreateAsync(options);
+                    basket.PaymentIntentId = intent.Id;
+                }
             }
 
             return intent;

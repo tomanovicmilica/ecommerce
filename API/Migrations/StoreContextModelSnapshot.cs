@@ -405,6 +405,9 @@ namespace API.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("OrderItemId"));
 
+                    b.Property<string>("DigitalFileUrl")
+                        .HasColumnType("text");
+
                     b.Property<decimal>("LineTotal")
                         .HasColumnType("decimal(18,2)");
 
@@ -425,6 +428,9 @@ namespace API.Migrations
                         .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
+
+                    b.Property<int>("ProductType")
+                        .HasColumnType("integer");
 
                     b.Property<int?>("ProductVariantId")
                         .HasColumnType("integer");
@@ -768,12 +774,17 @@ namespace API.Migrations
                     b.Property<decimal>("ShippingCost")
                         .HasColumnType("numeric");
 
+                    b.Property<int>("ShippingMethodId")
+                        .HasColumnType("integer");
+
                     b.Property<string>("TrackingNumber")
                         .HasColumnType("text");
 
                     b.HasKey("Id");
 
                     b.HasIndex("OrderId");
+
+                    b.HasIndex("ShippingMethodId");
 
                     b.ToTable("ShippingInfos");
                 });
@@ -809,6 +820,78 @@ namespace API.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("ShippingMethods");
+                });
+
+            modelBuilder.Entity("API.Entities.SystemSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AdminEmail")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("AllowRegistration")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("BackupFrequency")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("EmailNotifications")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Language")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("LogLevel")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("MaintenanceMode")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("MaxLoginAttempts")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("RequireEmailVerification")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("SessionTimeout")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SiteDescription")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("SiteName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("SmsNotifications")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Timezone")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SystemSettings");
                 });
 
             modelBuilder.Entity("API.Entities.User", b =>
@@ -886,10 +969,61 @@ namespace API.Migrations
 
             modelBuilder.Entity("API.Entities.UserAddress", b =>
                 {
-                    b.Property<int>("AdressId")
+                    b.Property<int>("UserAddressId")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("integer");
 
-                    b.HasKey("AdressId");
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("UserAddressId"));
+
+                    b.Property<string>("AddressLine1")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("AddressLine2")
+                        .HasColumnType("text");
+
+                    b.Property<int>("AddressType")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("City")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Company")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Country")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("FirstName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("LastName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PhoneNumber")
+                        .HasColumnType("text");
+
+                    b.Property<string>("PostalCode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int?>("UserId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("UserAddressId");
+
+                    b.HasIndex("UserId");
 
                     b.ToTable("UserAddress");
                 });
@@ -1202,16 +1336,23 @@ namespace API.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("API.Entities.ShippingMethod", "ShippingMethod")
+                        .WithMany("ShippingInfos")
+                        .HasForeignKey("ShippingMethodId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.Navigation("Order");
+
+                    b.Navigation("ShippingMethod");
                 });
 
             modelBuilder.Entity("API.Entities.UserAddress", b =>
                 {
                     b.HasOne("API.Entities.User", null)
-                        .WithOne("Address")
-                        .HasForeignKey("API.Entities.UserAddress", "AdressId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .WithMany("Addresses")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<int>", b =>
@@ -1304,9 +1445,14 @@ namespace API.Migrations
                     b.Navigation("Attributes");
                 });
 
+            modelBuilder.Entity("API.Entities.ShippingMethod", b =>
+                {
+                    b.Navigation("ShippingInfos");
+                });
+
             modelBuilder.Entity("API.Entities.User", b =>
                 {
-                    b.Navigation("Address");
+                    b.Navigation("Addresses");
                 });
 #pragma warning restore 612, 618
         }

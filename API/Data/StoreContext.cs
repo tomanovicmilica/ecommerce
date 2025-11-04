@@ -35,16 +35,23 @@ namespace API.Data
         public DbSet<ShippingInfo>? ShippingInfos { get; set; }
 
         public DbSet<DigitalDownload>? DigitalDownloads { get; set; }
+        public DbSet<SystemSettings>? SystemSettings { get; set; }
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
             base.OnModelCreating(builder);
 
+            // Configure the Addresses collection relationship
             builder.Entity<User>()
-                .HasOne(a => a.Address)
+                .HasMany(u => u.Addresses)
                 .WithOne()
-                .HasForeignKey<UserAddress>(a => a.AdressId)
+                .HasForeignKey(a => a.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // Note: Keeping the old Address property for backward compatibility
+            // but it won't have a direct relationship configured
+            builder.Entity<User>()
+                .Ignore(u => u.Address);
 
             builder.Entity<Role>()
                 .HasData(
@@ -104,6 +111,12 @@ namespace API.Data
                 .HasOne(dd => dd.User)
                 .WithMany()
                 .HasForeignKey(dd => dd.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Entity<ShippingInfo>()
+                .HasOne(si => si.ShippingMethod)
+                .WithMany(sm => sm.ShippingInfos)
+                .HasForeignKey(si => si.ShippingMethodId)
                 .OnDelete(DeleteBehavior.Cascade);
         }
     }

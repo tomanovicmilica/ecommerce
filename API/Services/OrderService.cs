@@ -16,7 +16,7 @@ namespace API.Services
             _notificationService = notificationService;
         }
 
-        public async Task<Order> CreateOrderFromBasketAsync(int basketId, OrderAddress shippingAddress, OrderAddress? billingAddress)
+        public async Task<Order> CreateOrderFromBasketAsync(int basketId, int userId, OrderAddress shippingAddress, OrderAddress? billingAddress)
         {
             var basket = await _context.Baskets!
                 .Include(b => b.Items)
@@ -47,7 +47,9 @@ namespace API.Services
                     ProductDescription = basketItem.Product.Description,
                     UnitPrice = basketItem.Product.Price,
                     Quantity = basketItem.Quantity,
-                    ProductImageUrl = basketItem.Product.PictureUrl
+                    ProductImageUrl = basketItem.Product.PictureUrl,
+                    ProductType = basketItem.Product.ProductType,
+                    DigitalFileUrl = basketItem.Product.DigitalFileUrl
                 };
                 orderItem.CalculateLineTotal();
                 orderItems.Add(orderItem);
@@ -66,10 +68,15 @@ namespace API.Services
             var orderNumber = $"ORD-{DateTime.UtcNow:yyyyMMdd}-{new Random().Next(1000, 9999)}";
 
             // Create the order
+            // Digital-only orders should be automatically "Delivered" since there's no physical shipping
+            var initialOrderStatus = !requiresShipping && hasDigitalProducts
+                ? OrderStatus.Delivered
+                : OrderStatus.Pending;
+
             var order = new Order
             {
                 OrderNumber = orderNumber,
-                UserId = int.TryParse(basket.UserId, out int userId) ? userId : null,
+                UserId = userId,
                 BuyerEmail = "order@example.com", // This should be obtained from user context
                 OrderItems = orderItems,
                 ShippingAddressId = shippingAddress.OrderAddressId,
@@ -80,7 +87,7 @@ namespace API.Services
                 ShippingCost = shippingCost,
                 TaxAmount = 0, // Can be calculated based on shipping address
                 TotalAmount = subtotal + shippingCost,
-                OrderStatus = OrderStatus.Pending,
+                OrderStatus = initialOrderStatus,
                 PaymentStatus = PaymentStatus.Pending,
                 OrderDate = DateTime.UtcNow,
                 ContainsDigitalProducts = hasDigitalProducts,
@@ -91,6 +98,20 @@ namespace API.Services
             _context.Baskets!.Remove(basket);
 
             await _context.SaveChangesAsync();
+
+            // Create digital downloads immediately for digital products
+            Console.WriteLine($"[DigitalDownload] hasDigitalProducts: {hasDigitalProducts}, userId: {userId}");
+            if (hasDigitalProducts && userId > 0)
+            {
+                Console.WriteLine($"[DigitalDownload] Creating digital downloads for order {order.OrderId}");
+                // Use the order we just created (no need to reload since we have snapshot data in OrderItems)
+                await CreateDigitalDownloadsAsync(order);
+            }
+            else
+            {
+                Console.WriteLine("[DigitalDownload] Skipping digital download creation");
+            }
+
             return order;
         }
 
@@ -198,18 +219,68 @@ namespace API.Services
 
         private async Task CreateDigitalDownloadsAsync(Order order)
         {
+            Console.WriteLine($"[DigitalDownload] CreateDigitalDownloadsAsync called for order {order.OrderId}");
+            Console.WriteLine($"[DigitalDownload] Order has {order.OrderItems?.Count ?? 0} items");
+
+            // First try to use snapshot data from OrderItem
             var digitalOrderItems = order.OrderItems
-                .Where(item => item.Product?.ProductType == ProductType.Digital && !string.IsNullOrEmpty(item.Product.DigitalFileUrl))
+                .Where(item => item.ProductType == ProductType.Digital && !string.IsNullOrEmpty(item.DigitalFileUrl))
                 .ToList();
+
+            Console.WriteLine($"[DigitalDownload] Found {digitalOrderItems.Count} digital items using snapshot data");
+
+            // Fallback: For older orders (before migration), check Product table
+            if (digitalOrderItems.Count == 0)
+            {
+                Console.WriteLine($"[DigitalDownload] No items found with snapshot data, checking Product table...");
+
+                // Reload order with Product navigation property
+                var orderWithProducts = await _context.Orders!
+                    .Include(o => o.OrderItems)
+                    .ThenInclude(oi => oi.Product)
+                    .FirstOrDefaultAsync(o => o.OrderId == order.OrderId);
+
+                if (orderWithProducts != null)
+                {
+                    digitalOrderItems = orderWithProducts.OrderItems
+                        .Where(item => item.Product?.ProductType == ProductType.Digital && !string.IsNullOrEmpty(item.Product.DigitalFileUrl))
+                        .ToList();
+
+                    Console.WriteLine($"[DigitalDownload] Found {digitalOrderItems.Count} digital items from Product table");
+                }
+            }
 
             foreach (var orderItem in digitalOrderItems)
             {
+                // Get digital file URL from OrderItem or Product
+                var digitalFileUrl = !string.IsNullOrEmpty(orderItem.DigitalFileUrl)
+                    ? orderItem.DigitalFileUrl
+                    : orderItem.Product?.DigitalFileUrl;
+
+                if (string.IsNullOrEmpty(digitalFileUrl))
+                {
+                    Console.WriteLine($"[DigitalDownload] Skipping {orderItem.ProductName} - no DigitalFileUrl");
+                    continue;
+                }
+
+                Console.WriteLine($"[DigitalDownload] Creating download for: {orderItem.ProductName}, ProductId: {orderItem.ProductId}, DigitalFileUrl: {digitalFileUrl}");
+
+                // Check if download already exists for this order item
+                var existingDownload = await _context.DigitalDownloads!
+                    .FirstOrDefaultAsync(d => d.OrderItemId == orderItem.OrderItemId);
+
+                if (existingDownload != null)
+                {
+                    Console.WriteLine($"[DigitalDownload] Download already exists for OrderItemId: {orderItem.OrderItemId}, skipping");
+                    continue;
+                }
+
                 var digitalDownload = new DigitalDownload
                 {
                     OrderItemId = orderItem.OrderItemId,
                     UserId = order.UserId.Value,
                     ProductName = orderItem.ProductName ?? "Digital Product",
-                    DigitalFileUrl = orderItem.Product!.DigitalFileUrl!,
+                    DigitalFileUrl = digitalFileUrl!,
                     ExpiresAt = DateTime.UtcNow.AddDays(30), // 30 days to download
                     MaxDownloads = 3 // Allow 3 downloads
                 };
@@ -218,6 +289,7 @@ namespace API.Services
             }
 
             await _context.SaveChangesAsync();
+            Console.WriteLine($"[DigitalDownload] Saved {digitalOrderItems.Count} digital downloads to database");
         }
     }
 }

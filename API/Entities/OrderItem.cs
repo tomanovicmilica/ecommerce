@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using API.Entities.enums;
 
 namespace API.Entities
 {
@@ -34,6 +35,10 @@ namespace API.Entities
         public decimal LineTotal { get; set; }
 
         public string? ProductImageUrl { get; set; }
+
+        // Digital product specific fields (snapshot at order time)
+        public ProductType ProductType { get; set; } = ProductType.Physical;
+        public string? DigitalFileUrl { get; set; }
 
         // Navigation properties
         public ICollection<OrderItemAttribute> Attributes { get; set; } = new List<OrderItemAttribute>();

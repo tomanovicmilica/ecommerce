@@ -8,8 +8,10 @@ import AdminLayout from '../layout/AdminLayout';
 import agent from '../../../app/api/agent';
 import { toast } from 'react-toastify';
 import BulkActions, { productBulkActions } from '../components/BulkActions';
-import ExportManager, { generateCSV, downloadFile } from '../components/ExportManager';
+import ExportManager, { generateCSV, generateXLSX, downloadFile } from '../components/ExportManager';
 import ProductForm from './ProductForm';
+import BulkPriceUpdateModal from './BulkPriceUpdateModal';
+import ProductDetailsModal from './ProductDetailsModal';
 
 interface AdminProduct extends Product {
     totalStock: number;
@@ -29,6 +31,9 @@ export default function ProductManagement() {
     const [currentView, setCurrentView] = useState<'list' | 'add' | 'edit' | 'view'>('list');
     const [selectedProduct, setSelectedProduct] = useState<AdminProduct | null>(null);
     const [formLoading, setFormLoading] = useState(false);
+    const [showPriceUpdateModal, setShowPriceUpdateModal] = useState(false);
+    const [showDetailsModal, setShowDetailsModal] = useState(false);
+    const [productToView, setProductToView] = useState<AdminProduct | null>(null);
 
     useEffect(() => {
         fetchProducts();
@@ -80,26 +85,26 @@ export default function ProductManagement() {
     };
 
     const handleDeleteProduct = async (productId: number) => {
-        if (!confirm('Are you sure you want to delete this product?')) return;
+        if (!confirm('Da li ste sigurni da želite da obrišete proizvod?')) return;
 
         try {
             await agent.Admin.deleteProduct(productId);
-            toast.success('Product deleted successfully');
+            toast.success('Proizvod uspešno obrisan');
             fetchProducts();
         } catch (error) {
-            console.error('Failed to delete product:', error);
-            toast.error('Failed to delete product');
+            console.error('Neuspešno brisanje proizvoda:', error);
+            toast.error('Neuspešno brisanje proizvoda');
         }
     };
 
     const handleStatusChange = async (productId: number, newStatus: string) => {
         try {
             await agent.Admin.updateProductStatus(productId, newStatus);
-            toast.success('Product status updated');
+            toast.success('Status proizvoda ažuriran');
             fetchProducts();
         } catch (error) {
-            console.error('Failed to update product status:', error);
-            toast.error('Failed to update product status');
+            console.error('Neuspešno ažuriranje statusa:', error);
+            toast.error('Neuspešno ažuriranje statusa');
         }
     };
 
@@ -160,8 +165,7 @@ export default function ProductManagement() {
                     break;
 
                 case 'updatePrices':
-                    // TODO: Implement bulk price update
-                    toast.info('Bulk price update functionality coming soon');
+                    setShowPriceUpdateModal(true);
                     break;
 
                 default:
@@ -180,9 +184,9 @@ export default function ProductManagement() {
 
     const handleExport = async (options: any) => {
         try {
-            // Only support CSV export (client-side) for now
-            if (options.format !== 'csv') {
-                toast.info('Only CSV export is currently available. Excel/PDF export will be added soon.');
+            // Support CSV and XLSX export (client-side)
+            if (options.format !== 'csv' && options.format !== 'xlsx') {
+                toast.info('Only CSV and Excel export are currently available. PDF export will be added soon.');
                 return;
             }
 
@@ -206,9 +210,16 @@ export default function ProductManagement() {
             }));
 
             const columns = options.columns || ['id', 'name', 'category', 'price', 'stock', 'status'];
-            const csvContent = generateCSV(exportData, columns);
-            const filename = `products_export_${new Date().toISOString().split('T')[0]}.csv`;
-            downloadFile(csvContent, filename, 'text/csv');
+            const timestamp = new Date().toISOString().split('T')[0];
+
+            if (options.format === 'csv') {
+                const csvContent = generateCSV(exportData, columns);
+                const filename = `products_export_${timestamp}.csv`;
+                downloadFile(csvContent, filename, 'text/csv');
+            } else if (options.format === 'xlsx') {
+                const filename = `products_export_${timestamp}.xlsx`;
+                await generateXLSX(exportData, columns, filename);
+            }
 
             toast.success(`Successfully exported ${dataToExport.length} products`);
             setSelectedProducts([]); // Clear selection after export
@@ -229,8 +240,8 @@ export default function ProductManagement() {
     };
 
     const handleViewProduct = (product: AdminProduct) => {
-        setSelectedProduct(product);
-        setCurrentView('view');
+        setProductToView(product);
+        setShowDetailsModal(true);
     };
 
     const handleFormSubmit = async (formData: any) => {
@@ -240,7 +251,12 @@ export default function ProductManagement() {
                 await agent.Admin.createProduct(formData);
                 toast.success('Product created successfully');
             } else if (currentView === 'edit' && selectedProduct) {
-                await agent.Admin.updateProduct(selectedProduct.productId, formData);
+                // Add productId to formData for update
+                const updateData = {
+                    ...formData,
+                    productId: selectedProduct.productId
+                };
+                await agent.Admin.updateProduct(selectedProduct.productId, updateData);
                 toast.success('Product updated successfully');
             }
 
@@ -283,6 +299,12 @@ export default function ProductManagement() {
         }
     };
 
+    const handleBulkPriceUpdate = async (productIds: number[], updateType: 'increase' | 'decrease' | 'set', value: number) => {
+        await agent.Admin.bulkUpdatePrices(productIds, updateType, value);
+        await fetchProducts();
+        setSelectedProducts([]);
+    };
+
     if (loading) return <LoadingComponent />;
 
     // Show form for add/edit/view modes
@@ -316,7 +338,7 @@ export default function ProductManagement() {
             {/* Header */}
             <div className="mb-8">
                 <div className="bg-gradient-to-r from-brown to-beige rounded-xl p-6 text-white shadow-sm mb-6">
-                    <h1 className="text-3xl font-bold">Product Management</h1>
+                    <h1 className="text-3xl font-bold">Upravljanje proizvodima</h1>
                     <p className="mt-2 opacity-90">{products.length} proizvoda ukupno</p>
                 </div>
                 <div className="flex justify-end space-x-3">
@@ -385,8 +407,8 @@ export default function ProductManagement() {
                         className="w-full px-3 py-2 border border-light-grey/30 rounded-lg focus:ring-2 focus:ring-brown focus:border-transparent"
                     >
                         <option value="">Svi tipovi</option>
-                        <option value="0">📦 Fizički</option>
-                        <option value="1">💾 Digitalni</option>
+                        <option value="0">Fizički</option>
+                        <option value="1">Digitalni</option>
                     </select>
 
                     {/* Bulk Actions */}
@@ -450,7 +472,7 @@ export default function ProductManagement() {
                                         ? 'bg-beige/10 text-beige border-beige/20'
                                         : 'bg-brown/10 text-brown border-brown/20'
                                 }`}>
-                                    {product.productType === 1 ? '💾 Digital' : '📦 Physical'}
+                                    {product.productType === 1 ? 'Digital' : 'Physical'}
                                 </span>
                             </td>
                             <td className="px-4 py-3 text-sm font-medium text-dark-grey">
@@ -524,6 +546,31 @@ export default function ProductManagement() {
                 onClose={() => setShowExportModal(false)}
             />
             </div>
+            {/* Bulk Price Update Modal */}
+            {showPriceUpdateModal && (
+                <BulkPriceUpdateModal
+                    products={products
+                        .filter(p => selectedProducts.includes(p.productId))
+                        .map(p => ({
+                            productId: p.productId,
+                            name: p.name,
+                            price: p.price
+                        }))}
+                    onClose={() => setShowPriceUpdateModal(false)}
+                    onUpdate={handleBulkPriceUpdate}
+                />
+            )}
+
+            {/* Product Details Modal */}
+            {showDetailsModal && productToView && (
+                <ProductDetailsModal
+                    product={productToView}
+                    onClose={() => {
+                        setShowDetailsModal(false);
+                        setProductToView(null);
+                    }}
+                />
+            )}
         </AdminLayout>
     );
 }

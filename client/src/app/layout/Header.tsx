@@ -61,7 +61,7 @@ export default function Header() {
 
           {/* Center: Title/Logo */}
           <Link to="/home" className="text-2xl font-serif-bold text-shadow-brown hover:text-light-grey transition-colors">
-            b l i s s k a
+            c r a f t y
           </Link>
 
           {/* Right: Icons */}

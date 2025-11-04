@@ -9,7 +9,7 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8 py-12">
           {/* Brand Section */}
           <div className="space-y-4">
-            <h3 className="text-2xl font-serif-bold text-beige">b l i s s k a</h3>
+            <h3 className="text-2xl font-serif-bold text-beige">c r a f t</h3>
             <p className="text-gray-300 text-xs">
               Ručno rađeni proizvodi sa ljubavlju i pažnjom za detalje.
             </p>
@@ -83,7 +83,7 @@ export default function Footer() {
             <div className="space-y-3">
               <div className="flex items-center space-x-3">
                 <Mail size={16} className="text-beige" />
-                <span className="text-gray-300 text-xs">info@blisska.rs</span>
+                <span className="text-gray-300 text-xs">info@craft.rs</span>
               </div>
               <div className="flex items-center space-x-3">
                 <Phone size={16} className="text-beige" />
@@ -101,7 +101,7 @@ export default function Footer() {
         <div className="border-t border-gray-600 py-6">
           <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
             <p className="text-gray-400 text-xs">
-              © 2024 Blisska. Sva prava zadržana.
+              © 2024 craft. Sva prava zadržana.
             </p>
             <div className="flex space-x-6">
               <a href="#" className="text-gray-400 hover:text-beige transition-colors text-xs">

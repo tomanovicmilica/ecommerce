@@ -12,6 +12,8 @@ export default function Orders() {
     const [orders, setOrders] = useState<Order[] | null>(null);
     const [loading, setLoading] = useState(true);
     const [selectedOrderNumber, setSelectedOrderNumber] = useState(0);
+    const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+    const [loadingDetails, setLoadingDetails] = useState(false);
     const { calculateOrderTotal } = useOrder();
 
     // Helper function to get status styling
@@ -47,14 +49,43 @@ export default function Orders() {
         fetchOrders();
     }, []);
 
+    // Fetch full order details when an order is selected
+    useEffect(() => {
+        const fetchOrderDetails = async () => {
+            if (selectedOrderNumber > 0) {
+                setLoadingDetails(true);
+                try {
+                    const orderDetails = await agent.Orders.fetch(selectedOrderNumber);
+                    setSelectedOrder(orderDetails);
+                } catch (error: any) {
+                    console.error('Error fetching order details:', error);
+                    // Fallback to the order from the list if fetch fails
+                    const fallbackOrder = orders?.find(o => o.orderId === selectedOrderNumber);
+                    setSelectedOrder(fallbackOrder || null);
+                } finally {
+                    setLoadingDetails(false);
+                }
+            } else {
+                setSelectedOrder(null);
+            }
+        };
+
+        fetchOrderDetails();
+    }, [selectedOrderNumber, orders]);
+
     if (loading) return <LoadingComponent />
 
-    if (selectedOrderNumber > 0) return (
-        <OrderDetailed
-            order={orders?.find(o => o.orderId === selectedOrderNumber)!}
-            setSelectedOrder={setSelectedOrderNumber}
-        />
-    )
+    if (selectedOrderNumber > 0) {
+        if (loadingDetails || !selectedOrder) {
+            return <LoadingComponent />
+        }
+        return (
+            <OrderDetailed
+                order={selectedOrder}
+                setSelectedOrder={setSelectedOrderNumber}
+            />
+        )
+    }
 
     const headers = ["Order Number", "Total", "Order Date", "Order Status", "Tracking", "Actions"];
 
@@ -66,7 +97,7 @@ export default function Orders() {
                 <Table headers={headers}>
                     {orders.map((order) => {
                         const statusStyles = getStatusStyles(order.orderStatus);
-                        const calculatedTotal = calculateOrderTotal(order.subtotal, order.deliveryFee);
+                        const calculatedTotal = calculateOrderTotal(order.subtotal, order.shippingCost);
 
                         return (
                             <tr key={order.orderId} className="hover:bg-gray-50 transition-colors">
@@ -74,7 +105,7 @@ export default function Orders() {
                                     #{order.orderId}
                                 </td>
                                 <td className="px-4 py-3 text-sm text-gray-600 text-right">
-                                    {currencyFormat(order.total || calculatedTotal)}
+                                    {currencyFormat(order.totalAmount || calculatedTotal)}
                                 </td>
                                 <td className="px-4 py-3 text-sm text-gray-600 text-right">
                                     {new Date(order.orderDate).toLocaleDateString()}

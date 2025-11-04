@@ -1,5 +1,6 @@
 import { currencyFormat } from "../../app/util/util";
 import { useAppSelector } from "../../app/store/configureStore";
+import { ProductType } from "../../app/models/product";
 
 interface Props {
   subtotal?: number;
@@ -15,7 +16,11 @@ export default function BasketSummary({ subtotal }: Props) {
         0
       ) ?? 0;
 
-  const deliveryFee = subtotal > 5999 ? 0 : 500;
+  // Check if all items in basket are digital products
+  const allItemsDigital = basket?.items.every(item => item.productType === ProductType.Digital) ?? false;
+
+  // Delivery fee is 0 if all items are digital, or if subtotal > 5999
+  const deliveryFee = allItemsDigital ? 0 : (subtotal > 5999 ? 0 : 500);
 
   return (
     <div className="space-y-3">
@@ -42,7 +47,9 @@ export default function BasketSummary({ subtotal }: Props) {
 
       {/* Note */}
       <div className="text-xs text-gray-500 italic mt-2">
-        *Besplatna dostava za porudžbine preko 6000 rsd
+        {allItemsDigital
+          ? "*Besplatna dostava za digitalne proizvode"
+          : "*Besplatna dostava za porudžbine preko 6000 rsd"}
       </div>
     </div>
   );

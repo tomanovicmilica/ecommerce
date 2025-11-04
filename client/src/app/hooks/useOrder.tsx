@@ -34,10 +34,12 @@ export function useOrder() {
 
     if (!address.firstName.trim()) errors.push('First name is required');
     if (!address.lastName.trim()) errors.push('Last name is required');
-    if (!address.address1.trim()) errors.push('Address is required');
+    const addressLine = address.addressLine1 || address.address1;
+    if (!addressLine?.trim()) errors.push('Address is required');
     if (!address.city.trim()) errors.push('City is required');
     if (!address.state.trim()) errors.push('State is required');
-    if (!address.zip.trim()) errors.push('ZIP code is required');
+    const postal = address.postalCode || address.zip;
+    if (!postal?.trim()) errors.push('ZIP code is required');
     if (!address.country.trim()) errors.push('Country is required');
 
     return errors;

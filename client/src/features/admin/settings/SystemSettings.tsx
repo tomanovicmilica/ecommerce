@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Save, Globe, Mail, Clock, Database, Shield, AlertCircle } from 'lucide-react';
 import AdminLayout from '../layout/AdminLayout';
 import SettingsLayout from './SettingsLayout';
 import { toast } from 'react-toastify';
+import agent from '../../../app/api/agent';
+import LoadingComponent from '../../../app/layout/LoadingComponent';
 
 interface SystemConfig {
     siteName: string;
@@ -23,7 +25,8 @@ interface SystemConfig {
 }
 
 export default function SystemSettings() {
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
     const [hasChanges, setHasChanges] = useState(false);
 
     const [settings, setSettings] = useState<SystemConfig>({
@@ -44,6 +47,40 @@ export default function SystemSettings() {
         logLevel: 'info'
     });
 
+    // Fetch settings on component mount
+    useEffect(() => {
+        fetchSettings();
+    }, []);
+
+    const fetchSettings = async () => {
+        try {
+            setLoading(true);
+            const data = await agent.Admin.getSystemSettings();
+            setSettings({
+                siteName: data.siteName,
+                siteDescription: data.siteDescription,
+                adminEmail: data.adminEmail,
+                timezone: data.timezone,
+                currency: data.currency,
+                language: data.language,
+                maintenanceMode: data.maintenanceMode,
+                emailNotifications: data.emailNotifications,
+                smsNotifications: data.smsNotifications,
+                allowRegistration: data.allowRegistration,
+                requireEmailVerification: data.requireEmailVerification,
+                sessionTimeout: data.sessionTimeout,
+                maxLoginAttempts: data.maxLoginAttempts,
+                backupFrequency: data.backupFrequency,
+                logLevel: data.logLevel
+            });
+        } catch (error) {
+            console.error('Failed to fetch settings:', error);
+            toast.error('Failed to load system settings');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleInputChange = (field: keyof SystemConfig, value: string | number | boolean) => {
         setSettings(prev => ({
             ...prev,
@@ -54,13 +91,9 @@ export default function SystemSettings() {
 
     const handleSave = async () => {
         try {
-            setLoading(true);
+            setSaving(true);
 
-            // TODO: Replace with actual API call when backend is ready
-            // await agent.Admin.updateSystemSettings(settings);
-
-            // Simulate API call
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await agent.Admin.updateSystemSettings(settings);
 
             toast.success('System settings updated successfully');
             setHasChanges(false);
@@ -68,32 +101,19 @@ export default function SystemSettings() {
             console.error('Failed to update settings:', error);
             toast.error('Failed to update system settings');
         } finally {
-            setLoading(false);
+            setSaving(false);
         }
     };
 
-    const handleReset = () => {
+    const handleReset = async () => {
         if (confirm('Are you sure you want to reset all settings to default values?')) {
-            setSettings({
-                siteName: 'E-Commerce Store',
-                siteDescription: 'Your premier online shopping destination',
-                adminEmail: 'admin@ecommerce.com',
-                timezone: 'UTC',
-                currency: 'USD',
-                language: 'en',
-                maintenanceMode: false,
-                emailNotifications: true,
-                smsNotifications: false,
-                allowRegistration: true,
-                requireEmailVerification: true,
-                sessionTimeout: 30,
-                maxLoginAttempts: 5,
-                backupFrequency: 'daily',
-                logLevel: 'info'
-            });
-            setHasChanges(true);
+            // Refetch from server to get current defaults
+            await fetchSettings();
+            setHasChanges(false);
         }
     };
+
+    if (loading) return <LoadingComponent />;
 
     return (
         <AdminLayout>
@@ -109,17 +129,18 @@ export default function SystemSettings() {
                     <div className="flex space-x-3">
                         <button
                             onClick={handleReset}
-                            className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                            disabled={saving}
+                            className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
                             Reset to Default
                         </button>
                         <button
                             onClick={handleSave}
-                            disabled={!hasChanges || loading}
+                            disabled={!hasChanges || saving}
                             className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
                         >
                             <Save className="w-4 h-4 mr-2" />
-                            {loading ? 'Saving...' : 'Save Changes'}
+                            {saving ? 'Saving...' : 'Save Changes'}
                         </button>
                     </div>
                 </div>

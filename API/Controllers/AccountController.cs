@@ -163,6 +163,175 @@ namespace API.Controllers
 
             return BadRequest(new ProblemDetails { Title = "Problem updating user" });
         }
+
+        [Authorize]
+        [HttpPut("changePassword")]
+        public async Task<ActionResult> ChangePassword([FromBody] ChangePasswordDto changePasswordDto)
+        {
+            var user = await _userManager.FindByNameAsync(User.Identity!.Name!);
+            if (user == null)
+            {
+                return NotFound("User not found");
+            }
+
+            var result = await _userManager.ChangePasswordAsync(user, changePasswordDto.CurrentPassword!, changePasswordDto.NewPassword!);
+
+            if (result.Succeeded)
+            {
+                return Ok(new { message = "Password changed successfully" });
+            }
+
+            foreach (var error in result.Errors)
+            {
+                ModelState.AddModelError(error.Code, error.Description);
+            }
+
+            return BadRequest(new ProblemDetails { Title = "Problem changing password" });
+        }
+
+        // Address management endpoints
+        [Authorize]
+        [HttpGet("addresses")]
+        public async Task<ActionResult<List<UserAddress>>> GetAddresses()
+        {
+            var user = await _userManager.FindByNameAsync(User.Identity!.Name!);
+
+            if (user == null)
+                return NotFound("User not found");
+
+            var addresses = await _context.Set<UserAddress>()
+                .Where(a => a.UserId == user.Id)
+                .ToListAsync();
+
+            return Ok(addresses);
+        }
+
+        [Authorize]
+        [HttpPost("addresses")]
+        public async Task<ActionResult<UserAddress>> AddAddress([FromBody] UserAddress address)
+        {
+            var user = await _userManager.FindByNameAsync(User.Identity!.Name!);
+
+            if (user == null)
+                return NotFound("User not found");
+
+            // Set the UserId for the new address
+            address.UserId = user.Id;
+
+            // If this is set as default, unset all other default addresses for this user
+            if (address.IsDefault)
+            {
+                var existingAddresses = await _context.Set<UserAddress>()
+                    .Where(a => a.UserId == user.Id)
+                    .ToListAsync();
+
+                foreach (var addr in existingAddresses)
+                {
+                    addr.IsDefault = false;
+                }
+            }
+
+            _context.Set<UserAddress>().Add(address);
+            await _context.SaveChangesAsync();
+
+            return Ok(address);
+        }
+
+        [Authorize]
+        [HttpPut("addresses/{id}")]
+        public async Task<ActionResult> UpdateAddress(int id, [FromBody] UserAddress updatedAddress)
+        {
+            var user = await _userManager.FindByNameAsync(User.Identity!.Name!);
+
+            if (user == null)
+                return NotFound("User not found");
+
+            var address = await _context.Set<UserAddress>()
+                .FirstOrDefaultAsync(a => a.UserAddressId == id && a.UserId == user.Id);
+
+            if (address == null)
+                return NotFound("Address not found");
+
+            // Update address fields
+            address.FirstName = updatedAddress.FirstName;
+            address.LastName = updatedAddress.LastName;
+            address.AddressLine1 = updatedAddress.AddressLine1;
+            address.AddressLine2 = updatedAddress.AddressLine2;
+            address.City = updatedAddress.City;
+            address.State = updatedAddress.State;
+            address.PostalCode = updatedAddress.PostalCode;
+            address.Country = updatedAddress.Country;
+            address.PhoneNumber = updatedAddress.PhoneNumber;
+            address.Company = updatedAddress.Company;
+
+            // If this is set as default, unset all other default addresses
+            if (updatedAddress.IsDefault && !address.IsDefault)
+            {
+                var otherAddresses = await _context.Set<UserAddress>()
+                    .Where(a => a.UserId == user.Id && a.UserAddressId != id)
+                    .ToListAsync();
+
+                foreach (var addr in otherAddresses)
+                {
+                    addr.IsDefault = false;
+                }
+                address.IsDefault = true;
+            }
+
+            await _context.SaveChangesAsync();
+            return Ok(new { message = "Address updated successfully" });
+        }
+
+        [Authorize]
+        [HttpDelete("addresses/{id}")]
+        public async Task<ActionResult> DeleteAddress(int id)
+        {
+            var user = await _userManager.FindByNameAsync(User.Identity!.Name!);
+
+            if (user == null)
+                return NotFound("User not found");
+
+            var address = await _context.Set<UserAddress>()
+                .FirstOrDefaultAsync(a => a.UserAddressId == id && a.UserId == user.Id);
+
+            if (address == null)
+                return NotFound("Address not found");
+
+            _context.Set<UserAddress>().Remove(address);
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Address deleted successfully" });
+        }
+
+        [Authorize]
+        [HttpPut("addresses/{id}/default")]
+        public async Task<ActionResult> SetDefaultAddress(int id)
+        {
+            var user = await _userManager.FindByNameAsync(User.Identity!.Name!);
+
+            if (user == null)
+                return NotFound("User not found");
+
+            var address = await _context.Set<UserAddress>()
+                .FirstOrDefaultAsync(a => a.UserAddressId == id && a.UserId == user.Id);
+
+            if (address == null)
+                return NotFound("Address not found");
+
+            // Unset all other default addresses for this user
+            var allUserAddresses = await _context.Set<UserAddress>()
+                .Where(a => a.UserId == user.Id)
+                .ToListAsync();
+
+            foreach (var addr in allUserAddresses)
+            {
+                addr.IsDefault = addr.UserAddressId == id;
+            }
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Default address updated successfully" });
+        }
     }
 }
 

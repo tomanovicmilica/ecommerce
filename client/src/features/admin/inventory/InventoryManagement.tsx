@@ -13,7 +13,7 @@ interface InventoryItem {
     variantAttributes: string;
     currentStock: number;
     lowStockThreshold: number;
-    pictureUrl: string;
+    imageUrl: string;
     categoryName: string;
 }
 
@@ -57,7 +57,7 @@ export default function InventoryManagement() {
                             ).join(', ') || 'Default',
                             currentStock: variant.quantityInStock,
                             lowStockThreshold: 10, // configurable
-                            pictureUrl: product.pictureUrl,
+                            imageUrl: product.imageUrl,
                             categoryName: product.categoryName
                         });
                     });
@@ -70,7 +70,7 @@ export default function InventoryManagement() {
                         variantAttributes: 'Default',
                         currentStock: product.quantityInStock || 0,
                         lowStockThreshold: 10,
-                        pictureUrl: product.pictureUrl,
+                        imageUrl: product.imageUrl,
                         categoryName: product.categoryName
                     });
                 }
@@ -192,7 +192,7 @@ export default function InventoryManagement() {
                                         <div className="flex items-center space-x-3">
                                             <img
                                                 className="w-12 h-12 rounded-lg object-cover"
-                                                src={item.pictureUrl}
+                                                src={item.imageUrl}
                                                 alt={item.productName}
                                                 onError={(e) => {
                                                     (e.target as HTMLImageElement).src = '/images/placeholder.jpg';

@@ -121,28 +121,28 @@ export default function AdminDashboard() {
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                 <StatsCard
-                    title="Total Orders"
+                    title="Porudžbine"
                     value={stats?.totalOrders || 0}
                     change={stats?.ordersChange || 0}
                     icon={<ShoppingCart className="w-6 h-6" />}
                     color="primary"
                 />
                 <StatsCard
-                    title="Revenue"
-                    value={`$${stats?.totalRevenue?.toLocaleString() || 0}`}
+                    title="Zarada"
+                    value={`${stats?.totalRevenue?.toLocaleString() || 0}din`}
                     change={stats?.revenueChange || 0}
                     icon={<DollarSign className="w-6 h-6" />}
                     color="secondary"
                 />
                 <StatsCard
-                    title="Total Users"
+                    title="Korisnici"
                     value={stats?.totalUsers || 0}
                     change={stats?.usersChange || 0}
                     icon={<Users className="w-6 h-6" />}
                     color="accent"
                 />
                 <StatsCard
-                    title="Products"
+                    title="Proizvodi"
                     value={stats?.totalProducts || 0}
                     change={stats?.productsChange || 0}
                     icon={<Package className="w-6 h-6" />}
@@ -230,7 +230,7 @@ export default function AdminDashboard() {
                     </h3>
                     <div className="space-y-3">
                         <div className="flex justify-between">
-                            <span className="text-sm text-light-grey">Sales Goal</span>
+                            <span className="text-sm text-light-grey">Cilj prodaje</span>
                             <span className="text-sm font-medium text-brown">85%</span>
                         </div>
                         <div className="w-full bg-light-grey/20 rounded-full h-2">

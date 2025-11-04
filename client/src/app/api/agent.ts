@@ -2,7 +2,7 @@ import axios, { AxiosError, type AxiosResponse } from "axios";
 import { toast } from "react-toastify";
 import { router } from "../router/Routes";
 
-axios.defaults.baseURL = 'http://localhost:5089/api/';
+axios.defaults.baseURL = import.meta.env.VITE_API_URL;
 axios.defaults.withCredentials = true; // jer backend koristi AllowCredentials
 
 const responseBody = (response: AxiosResponse) => response.data;
@@ -31,7 +31,7 @@ axios.interceptors.response.use(async response => {
 
     // URLs to skip toast notifications for (let components handle these)
     const silentErrorUrls = [
-        'orders',
+        'order',
         'digitaldownloads',
         'addresses',
         'admin/notifications',
@@ -61,8 +61,19 @@ axios.interceptors.response.use(async response => {
         case 401:
             // Don't show toast for login/register/currentUser endpoints - let the components handle it
             if (!url.includes('login') && !url.includes('register') && !url.includes('currentUser') && !shouldSkipToast) {
-                toast.error(data?.title || 'Unauthorized');
+                const user = localStorage.getItem('user');
+                if (user) {
+                    // Token exists but is expired/invalid - log out and redirect
+                    console.log('[AUTH] 401 Unauthorized - Token expired. Logging out.');
+                    localStorage.removeItem('user');
+                    toast.error('Your session has expired. Please log in again.');
+                    setTimeout(() => router.navigate('/login'), 1000);
+                } else {
+                    // No user in storage
+                    toast.error(data?.title || 'Unauthorized');
+                }
             }
+            // For silent URLs (orders, digitaldownloads, etc.) - do nothing, let components handle it
             break;
         case 403:
             if (!shouldSkipToast) {
@@ -92,7 +103,30 @@ axios.interceptors.response.use(async response => {
 function createFormData(item: any) {
     let formData = new FormData();
     for (const key in item) {
-        formData.append(key, item[key])
+        const value = item[key];
+
+        // Skip undefined or null values
+        if (value === undefined || value === null) continue;
+
+        // Handle arrays (like images or variants)
+        if (Array.isArray(value)) {
+            if (key === 'images') {
+                // Append each image file
+                value.forEach((file: File) => {
+                    formData.append('File', file);
+                });
+            } else if (key === 'variants') {
+                // Serialize variants as JSON
+                formData.append(key, JSON.stringify(value));
+            } else {
+                // For other arrays, append each item
+                value.forEach((val: any) => {
+                    formData.append(key, val);
+                });
+            }
+        } else {
+            formData.append(key, value);
+        }
     }
     return formData;
 }
@@ -156,7 +190,6 @@ const Account = {
     changePassword: (values: { currentPassword: string; newPassword: string }) =>
         requests.put('account/changePassword', values),
 
-    // Address management
     getAddresses: () => requests.get('account/addresses'),
     addAddress: (address: any) => requests.post('account/addresses', address),
     updateAddress: (id: number, address: any) => requests.put(`account/addresses/${id}`, address),
@@ -169,11 +202,11 @@ const Payments = {
 }
 
 const Orders = {
-    create: (values: any) => requests.post('orders', values),
-    list: () => requests.get('orders'),
-    fetch: (id: number) => requests.get(`orders/${id}`),
-    getStatusHistory: (id: number) => requests.get(`orders/${id}/status-history`),
-    updateTracking: (id: number, trackingNumber: string) => requests.put(`orders/${id}/tracking`, { trackingNumber })
+    create: (values: any) => requests.post('order', values),
+    list: () => requests.get('order'),
+    fetch: (id: number) => requests.get(`order/${id}`),
+    getStatusHistory: (id: number) => requests.get(`order/${id}/status-history`),
+    updateTracking: (id: number, trackingNumber: string) => requests.put(`order/${id}/tracking`, { trackingNumber })
 }
 
 const DigitalDownloads = {
@@ -197,24 +230,31 @@ const DigitalDownloads = {
             };
         });
     },
-    markDownloadCompleted: (downloadId: number) => requests.post(`digitaldownloads/${downloadId}/complete`, {})
+    markDownloadCompleted: (downloadId: number) => requests.post(`digitaldownloads/${downloadId}/complete`, {}),
+    getDownloadStatus: (downloadId: number) => requests.get(`digitaldownloads/${downloadId}/status`),
+    resetDownload: (downloadId: number) => requests.post(`digitaldownloads/${downloadId}/reset`, {}),
+    syncDownloadUrl: (downloadId: number) => requests.post(`digitaldownloads/${downloadId}/sync-url`, {})
 }
 
 const Admin = {
-    // Products
+   
     getProducts: (params?: URLSearchParams) => requests.get('products/admin', params),
     createProduct: (product: any) => requests.postForm('products', createFormData(product)),
-    updateProduct: (id: number, product: any) => requests.putForm(`products`, createFormData(product)),
+    updateProduct: (_id: number, product: any) => requests.putForm(`products`, createFormData(product)),
     deleteProduct: (id: number) => requests.delete(`products/${id}`),
     updateProductStatus: (id: number, status: string) => requests.put(`products/${id}/status`, { status }),
+    bulkUpdatePrices: (productIds: number[], updateType: string, value: number) =>
+        requests.put('products/bulk-update-prices', {
+            ProductIds: productIds,
+            UpdateType: updateType,
+            Value: value
+        }),
 
-    // Categories
     getCategories: () => requests.get('category/admin'),
     createCategory: (category: any) => requests.post('category', category),
     updateCategory: (id: number, category: any) => requests.put(`category/${id}`, category),
     deleteCategory: (id: number) => requests.delete(`category/${id}`),
 
-    // Attributes
     getAttributes: () => requests.get('attributes'),
     createAttribute: (attribute: any) => requests.post('attributes', attribute),
     updateAttribute: (id: number, attribute: any) => requests.put(`attributes/${id}`, attribute),
@@ -222,32 +262,57 @@ const Admin = {
     addAttributeValue: (attributeId: number, value: any) => requests.post(`attributes/${attributeId}/values`, value),
     deleteAttributeValue: (attributeId: number, valueId: number) => requests.delete(`attributes/${attributeId}/values/${valueId}`),
 
-    // Orders
-    getOrders: (params?: URLSearchParams) => requests.get('orders/admin', params),
-    updateOrderStatus: (id: number, status: string) => requests.put(`orders/admin/${id}/status`, { status }),
+    getOrders: (params?: URLSearchParams) => requests.get('order/admin', params),
+    updateOrderStatus: (id: number, status: string) =>
+        requests.put(`order/admin/${id}/status`, { Status: status }),
     addOrderStatusUpdate: (orderId: number, data: { status: string; notes?: string; trackingNumber?: string; sendCustomerEmail?: boolean }) =>
-        requests.post(`orders/admin/${orderId}/status-update`, data),
-    getOrderStatusHistory: (orderId: number) => requests.get(`orders/admin/${orderId}/status-history`),
+        requests.post(`order/admin/${orderId}/status-update`, {
+            Status: data.status,
+            Notes: data.notes,
+            TrackingNumber: data.trackingNumber,
+            SendCustomerEmail: data.sendCustomerEmail
+        }),
+    getOrderStatusHistory: (orderId: number) => requests.get(`order/admin/${orderId}/status-history`),
     updateOrderTracking: (orderId: number, trackingNumber: string, notes?: string) =>
-        requests.put(`orders/admin/${orderId}/tracking`, { trackingNumber, notes }),
-    saveOrderNotes: (orderId: number, notes: string) => requests.put(`orders/admin/${orderId}/notes`, { notes }),
+        requests.put(`order/admin/${orderId}/tracking`, {
+            TrackingNumber: trackingNumber,
+            Notes: notes
+        }),
+    saveOrderNotes: (orderId: number, notes: string) =>
+        requests.put(`order/admin/${orderId}/notes`, { Notes: notes }),
+    sendOrderEmail: (orderId: number, subject: string, message: string) =>
+        requests.post(`order/admin/${orderId}/send-email`, {
+            Subject: subject,
+            Message: message
+        }),
+    bulkUpdateOrderStatus: (orderIds: number[], status: string) =>
+        requests.put('order/admin/bulk-update-status', {
+            OrderIds: orderIds,
+            Status: status
+        }),
 
-    // Users
     getUsers: (params?: URLSearchParams) => requests.get('admin/users', params),
     updateUserRole: (id: number, role: string) => requests.put(`admin/users/${id}/role`, { role }),
+    updateUser: (id: number, userData: { firstName?: string; lastName?: string; email?: string; role?: string; status?: string }) =>
+        requests.put(`admin/users/${id}`, userData),
+    suspendUser: (id: number) => requests.put(`admin/users/${id}/suspend`, {}),
+    unsuspendUser: (id: number) => requests.put(`admin/users/${id}/unsuspend`, {}),
+    sendEmailToUser: (id: number, subject: string, message: string) =>
+        requests.post(`admin/users/${id}/send-email`, { Subject: subject, Message: message }),
 
-    // Roles
     getRoles: () => requests.get('admin/roles'),
     createRole: (name: string) => requests.post('admin/roles', { name }),
     deleteRole: (id: number) => requests.delete(`admin/roles/${id}`),
 
-    // Dashboard Stats
     getDashboardStats: () => requests.get('admin/dashboard/stats'),
     getLowStockProducts: () => requests.get('admin/inventory/low-stock'),
 
-    // Inventory
     updateStock: (productId: number, variantId: number, quantity: number, reason: string) =>
         requests.put(`products/admin/stock/adjust`, { productId, variantId, quantity, reason }),
+
+    // System Settings
+    getSystemSettings: () => requests.get('admin/settings'),
+    updateSystemSettings: (settings: any) => requests.put('admin/settings', settings),
 }
 
 const agent = {

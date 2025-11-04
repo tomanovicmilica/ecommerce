@@ -9,14 +9,15 @@ export const shippingAddressSchema = z.object({
     city: z.string().min(1, 'City is required'),
     zip: z.string().min(1, 'ZIP code is required'),
     country: z.string().min(1, 'Country is required'),
+    phoneNumber: z.string().optional(),
     saveAddress: z.boolean().optional()
 });
 
-// Step 2: Review Order Schema (no validation needed)
-export const reviewOrderSchema = z.object({});
+// Step 2: Review Order Schema (includes address fields with optional validation)
+export const reviewOrderSchema = shippingAddressSchema.partial();
 
-// Step 3: Payment Details Schema
-export const paymentDetailsSchema = z.object({
+// Step 3: Payment Details Schema (includes all previous fields)
+export const paymentDetailsSchema = shippingAddressSchema.partial().extend({
     nameOnCard: z.string().min(1, 'Name on card is required')
 });
 

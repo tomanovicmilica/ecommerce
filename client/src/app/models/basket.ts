@@ -1,3 +1,5 @@
+import { ProductType } from "./product";
+
 export interface Basket {
     basketId: number;
     buyerId: string;
@@ -6,7 +8,7 @@ export interface Basket {
     paymentIntentId?: string;
     clientSecret?: string;
   }
-  
+
   export interface Item {
     productId: number;
     name: string;
@@ -15,6 +17,7 @@ export interface Basket {
     imageUrl: string;
     quantity: number;
     productVariantId?: number;
+    productType: ProductType;
     attributes?: { attributeName: string; attributeValue: string }[];
     attributeValueIds?: number[];
   }

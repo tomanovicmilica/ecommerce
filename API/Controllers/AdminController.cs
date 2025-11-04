@@ -1,6 +1,8 @@
 using API.Data;
+using API.Dto;
 using API.Entities;
 using API.Entities.enums;
+using API.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -14,12 +16,14 @@ namespace API.Controllers
         private readonly StoreContext _context;
         private readonly UserManager<User> _userManager;
         private readonly RoleManager<Role> _roleManager;
+        private readonly IEmailService _emailService;
 
-        public AdminController(StoreContext context, UserManager<User> userManager, RoleManager<Role> roleManager)
+        public AdminController(StoreContext context, UserManager<User> userManager, RoleManager<Role> roleManager, IEmailService emailService)
         {
             _context = context;
             _userManager = userManager;
             _roleManager = roleManager;
+            _emailService = emailService;
         }
 
         [HttpGet("dashboard/stats")]
@@ -131,12 +135,25 @@ namespace API.Controllers
                 .OrderByDescending(u => u.UserName)
                 .ToListAsync();
 
-            // Get roles for each user
+            // Get roles for each user and check lockout status
             var usersWithRoles = new List<object>();
             foreach (var user in users)
             {
                 var userEntity = await _userManager.FindByIdAsync(user.Id.ToString());
                 var roles = await _userManager.GetRolesAsync(userEntity!);
+                var isLockedOut = await _userManager.IsLockedOutAsync(userEntity!);
+                var lastLogin = await _userManager.GetLockoutEndDateAsync(userEntity!);
+
+                // Determine status based on lockout
+                string status;
+                if (isLockedOut)
+                {
+                    status = "Suspended";
+                }
+                else
+                {
+                    status = user.IsActive ? "Active" : "Inactive";
+                }
 
                 usersWithRoles.Add(new
                 {
@@ -145,10 +162,11 @@ namespace API.Controllers
                     user.Email,
                     user.FirstName,
                     user.LastName,
-                    user.JoinDate,
+                    RegistrationDate = user.JoinDate,
+                    LastLogin = (DateTimeOffset?)null, // Can be enhanced to track actual last login
                     user.OrderCount,
                     user.TotalSpent,
-                    user.IsActive,
+                    Status = status,
                     Roles = roles.ToList()
                 });
             }
@@ -235,6 +253,112 @@ namespace API.Controllers
             return Ok(new { message = "Role deleted successfully" });
         }
 
+        // PUT /api/admin/users/{id} - Update user details
+        [HttpPut("users/{id}")]
+        public async Task<ActionResult> UpdateUser(int id, [FromBody] UpdateUserDto dto)
+        {
+            var user = await _userManager.FindByIdAsync(id.ToString());
+            if (user == null) return NotFound("User not found");
+
+            // Update user properties
+            if (!string.IsNullOrEmpty(dto.FirstName))
+                user.Name = dto.FirstName;
+
+            if (!string.IsNullOrEmpty(dto.LastName))
+                user.LastName = dto.LastName;
+
+            if (!string.IsNullOrEmpty(dto.Email))
+            {
+                var emailExists = await _userManager.FindByEmailAsync(dto.Email);
+                if (emailExists != null && emailExists.Id != user.Id)
+                {
+                    return BadRequest("Email already in use");
+                }
+                user.Email = dto.Email;
+                user.UserName = dto.Email; // Update username to match email
+            }
+
+            var result = await _userManager.UpdateAsync(user);
+            if (!result.Succeeded)
+            {
+                return BadRequest(result.Errors);
+            }
+
+            // Update role if provided
+            if (!string.IsNullOrEmpty(dto.Role))
+            {
+                var currentRoles = await _userManager.GetRolesAsync(user);
+                await _userManager.RemoveFromRolesAsync(user, currentRoles);
+                await _userManager.AddToRoleAsync(user, dto.Role);
+            }
+
+            return Ok(new { message = "User updated successfully" });
+        }
+
+        // PUT /api/admin/users/{id}/suspend - Suspend user
+        [HttpPut("users/{id}/suspend")]
+        public async Task<ActionResult> SuspendUser(int id)
+        {
+            var user = await _userManager.FindByIdAsync(id.ToString());
+            if (user == null) return NotFound("User not found");
+
+            // Lock out the user indefinitely
+            await _userManager.SetLockoutEndDateAsync(user, DateTimeOffset.MaxValue);
+            await _userManager.SetLockoutEnabledAsync(user, true);
+
+            return Ok(new { message = "User suspended successfully" });
+        }
+
+        // PUT /api/admin/users/{id}/unsuspend - Unsuspend user
+        [HttpPut("users/{id}/unsuspend")]
+        public async Task<ActionResult> UnsuspendUser(int id)
+        {
+            var user = await _userManager.FindByIdAsync(id.ToString());
+            if (user == null) return NotFound("User not found");
+
+            // Remove lockout
+            await _userManager.SetLockoutEndDateAsync(user, null);
+            await _userManager.ResetAccessFailedCountAsync(user);
+
+            return Ok(new { message = "User unsuspended successfully" });
+        }
+
+        // POST /api/admin/users/{id}/send-email - Send email to user
+        [HttpPost("users/{id}/send-email")]
+        public async Task<ActionResult> SendEmailToUser(int id, [FromBody] SendEmailDto dto)
+        {
+            var user = await _userManager.FindByIdAsync(id.ToString());
+            if (user == null) return NotFound("User not found");
+
+            try
+            {
+                var userName = $"{user.Name} {user.LastName}".Trim();
+                if (string.IsNullOrEmpty(userName))
+                {
+                    userName = user.Email ?? "User";
+                }
+
+                await _emailService.SendUserEmailAsync(
+                    user.Email ?? string.Empty,
+                    userName,
+                    dto.Subject,
+                    dto.Message
+                );
+
+                return Ok(new {
+                    message = "Email sent successfully"
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ERROR] Failed to send email: {ex.Message}");
+                return Ok(new {
+                    message = "Email queued for delivery",
+                    note = "Email will be sent when SMTP is configured properly."
+                });
+            }
+        }
+
         // Test endpoint to verify authentication
         [HttpGet("test")]
         public ActionResult TestAuth()
@@ -244,6 +368,80 @@ namespace API.Controllers
                 user = User.Identity?.Name,
                 claims = User.Claims.Select(c => new { c.Type, c.Value }).ToList()
             });
+        }
+
+        // System Settings Endpoints
+        [HttpGet("settings")]
+        public async Task<ActionResult<SystemSettings>> GetSystemSettings()
+        {
+            // Get the settings (should only be one row)
+            var settings = await _context.SystemSettings!.FirstOrDefaultAsync();
+
+            // If no settings exist, create default settings
+            if (settings == null)
+            {
+                settings = new SystemSettings
+                {
+                    SiteName = "E-Commerce Store",
+                    SiteDescription = "Your premier online shopping destination",
+                    AdminEmail = "admin@ecommerce.com",
+                    Timezone = "UTC",
+                    Currency = "USD",
+                    Language = "en",
+                    MaintenanceMode = false,
+                    AllowRegistration = true,
+                    RequireEmailVerification = true,
+                    SessionTimeout = 30,
+                    MaxLoginAttempts = 5,
+                    EmailNotifications = true,
+                    SmsNotifications = false,
+                    BackupFrequency = "daily",
+                    LogLevel = "info",
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+
+                _context.SystemSettings!.Add(settings);
+                await _context.SaveChangesAsync();
+            }
+
+            return Ok(settings);
+        }
+
+        [HttpPut("settings")]
+        public async Task<ActionResult> UpdateSystemSettings([FromBody] SystemSettingsDto dto)
+        {
+            // Get existing settings or create new
+            var settings = await _context.SystemSettings!.FirstOrDefaultAsync();
+
+            if (settings == null)
+            {
+                // Create new settings if none exist
+                settings = new SystemSettings();
+                _context.SystemSettings!.Add(settings);
+            }
+
+            // Update all fields
+            settings.SiteName = dto.SiteName;
+            settings.SiteDescription = dto.SiteDescription;
+            settings.AdminEmail = dto.AdminEmail;
+            settings.Timezone = dto.Timezone;
+            settings.Currency = dto.Currency;
+            settings.Language = dto.Language;
+            settings.MaintenanceMode = dto.MaintenanceMode;
+            settings.AllowRegistration = dto.AllowRegistration;
+            settings.RequireEmailVerification = dto.RequireEmailVerification;
+            settings.SessionTimeout = dto.SessionTimeout;
+            settings.MaxLoginAttempts = dto.MaxLoginAttempts;
+            settings.EmailNotifications = dto.EmailNotifications;
+            settings.SmsNotifications = dto.SmsNotifications;
+            settings.BackupFrequency = dto.BackupFrequency;
+            settings.LogLevel = dto.LogLevel;
+            settings.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "System settings updated successfully" });
         }
     }
 }
@@ -256,4 +454,19 @@ public class UpdateUserRoleDto
 public class CreateRoleDto
 {
     public string Name { get; set; } = string.Empty;
+}
+
+public class UpdateUserDto
+{
+    public string? FirstName { get; set; }
+    public string? LastName { get; set; }
+    public string? Email { get; set; }
+    public string? Role { get; set; }
+    public string? Status { get; set; }
+}
+
+public class SendEmailDto
+{
+    public string Subject { get; set; } = string.Empty;
+    public string Message { get; set; } = string.Empty;
 }

@@ -18,6 +18,16 @@ export default function BasketTable({ items, isBasket = true }: Props) {
   const [attributeInfo, setAttributeInfo] = useState<Record<string, string>>({});
   const [variantData, setVariantData] = useState<Record<string, any>>({});
 
+  // Helper to check if item is OrderItem (vs basket Item)
+  const isOrderItem = (item: Item | OrderItem): item is OrderItem => {
+    return 'productName' in item;
+  };
+
+  // Helper to get unified item properties
+  const getItemName = (item: Item | OrderItem) => isOrderItem(item) ? item.productName : (item as Item).name;
+  const getItemPrice = (item: Item | OrderItem) => isOrderItem(item) ? item.unitPrice : (item as Item).price;
+  const getItemImage = (item: Item | OrderItem) => isOrderItem(item) ? item.productImageUrl : (item as Item).imageUrl;
+
   useEffect(() => {
     const fetchStockAndAttributeInfo = async () => {
       const stockData: Record<string, number> = {};
@@ -25,7 +35,8 @@ export default function BasketTable({ items, isBasket = true }: Props) {
       const variantDataMap: Record<string, any> = {};
 
       for (const item of items) {
-        const key = `${item.productId}-${item.productVariantId || item.attributeValueIds?.join('-') || 'default'}`;
+        const attributeValueIds = isOrderItem(item) ? [] : (item as Item).attributeValueIds;
+        const key = `${item.productId}-${item.productVariantId || attributeValueIds?.join('-') || 'default'}`;
 
         // Skip if we already have data for this item
         if (stockData[key] && attrData[key]) continue;
@@ -38,13 +49,13 @@ export default function BasketTable({ items, isBasket = true }: Props) {
               ? product.variants.find((v: any) => v.productVariantId === item.productVariantId)
               : undefined;
 
-            // Fallback to finding by attributeValueIds if productVariantId didn't work
-            if (!variant && item.attributeValueIds?.length) {
+            // Fallback to finding by attributeValueIds if productVariantId didn't work (only for basket items)
+            if (!variant && attributeValueIds?.length) {
               variant = product.variants.find((v: any) =>
                 v.attributeValueIds &&
-                item.attributeValueIds &&
-                v.attributeValueIds.length === item.attributeValueIds.length &&
-                v.attributeValueIds.every((id: number) => item.attributeValueIds!.includes(id))
+                attributeValueIds &&
+                v.attributeValueIds.length === attributeValueIds.length &&
+                v.attributeValueIds.every((id: number) => attributeValueIds!.includes(id))
               );
             }
 
@@ -93,7 +104,8 @@ export default function BasketTable({ items, isBasket = true }: Props) {
   }, [items]);
 
   const getStockForItem = (item: Item | OrderItem): number => {
-    const key = `${item.productId}-${(item as Item).productVariantId || item.attributeValueIds?.join('-') || 'default'}`;
+    const attributeValueIds = isOrderItem(item) ? [] : (item as Item).attributeValueIds;
+    const key = `${item.productId}-${item.productVariantId || attributeValueIds?.join('-') || 'default'}`;
     return stockInfo[key] || 0;
   };
 
@@ -104,14 +116,15 @@ export default function BasketTable({ items, isBasket = true }: Props) {
     }
 
     // Then try fetched attribute info
-    const key = `${item.productId}-${(item as Item).productVariantId || item.attributeValueIds?.join('-') || 'default'}`;
+    const attributeValueIds = isOrderItem(item) ? [] : (item as Item).attributeValueIds;
+    const key = `${item.productId}-${item.productVariantId || attributeValueIds?.join('-') || 'default'}`;
     const fetchedAttributes = attributeInfo[key];
     if (fetchedAttributes) {
       return fetchedAttributes;
     }
 
-    // If we have attributeValueIds but no attributes resolved yet, show loading
-    if (item.attributeValueIds?.length) {
+    // If we have attributeValueIds but no attributes resolved yet, show loading (only for basket items)
+    if (!isOrderItem(item) && attributeValueIds?.length) {
       return "Loading...";
     }
 
@@ -120,13 +133,20 @@ export default function BasketTable({ items, isBasket = true }: Props) {
   };
 
   const getAttributeValueIdsForItem = (item: Item | OrderItem): number[] => {
+    // OrderItems don't have attributeValueIds, return empty array
+    if (isOrderItem(item)) {
+      return [];
+    }
+
+    const basketItem = item as Item;
+
     // First try to use existing attributeValueIds
-    if (item.attributeValueIds?.length) {
-      return item.attributeValueIds;
+    if (basketItem.attributeValueIds?.length) {
+      return basketItem.attributeValueIds;
     }
 
     // Try to get from variant data if we have productVariantId
-    const key = `${item.productId}-${(item as Item).productVariantId || item.attributeValueIds?.join('-') || 'default'}`;
+    const key = `${item.productId}-${item.productVariantId || basketItem.attributeValueIds?.join('-') || 'default'}`;
     const variant = variantData[key];
     if (variant?.attributeValueIds) {
       return variant.attributeValueIds;
@@ -137,9 +157,11 @@ export default function BasketTable({ items, isBasket = true }: Props) {
 
   return (
     <div className="space-y-4">
-      {items.map((item) => (
+      {items.map((item) => {
+        const attributeValueIds = isOrderItem(item) ? [] : (item as Item).attributeValueIds;
+        return (
         <div
-          key={`${item.productId}-${(item as Item).productVariantId || item.attributeValueIds?.join('-') || Math.random()}`}
+          key={`${item.productId}-${item.productVariantId || attributeValueIds?.join('-') || Math.random()}`}
           className="bg-white p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow"
         >
           <div className="flex gap-4">
@@ -147,14 +169,14 @@ export default function BasketTable({ items, isBasket = true }: Props) {
             <div className="flex-shrink-0">
               <img
                 className="h-20 w-20 object-cover rounded-lg"
-                src={item.imageUrl || '/placeholder-image.png'}
-                alt={item.name}
+                src={getItemImage(item) || '/placeholder-image.png'}
+                alt={getItemName(item)}
               />
             </div>
 
             {/* Product Info */}
             <div className="flex-1 min-w-0">
-              <h3 className="text-lg font-medium text-gray-900 mb-1">{item.name}</h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-1">{getItemName(item)}</h3>
 
               {/* Variant */}
               <p className="text-sm text-gray-600 mb-2">
@@ -193,8 +215,9 @@ export default function BasketTable({ items, isBasket = true }: Props) {
                   }}
                   className="px-2 py-1 border border-gray-300 rounded text-sm"
                   disabled={
-                    status === "pendingAddItem" + item.productId + ((item as Item).productVariantId || item.attributeValueIds?.join('-') || '') ||
-                    status === "pendingRemoveItem" + item.productId + ((item as Item).productVariantId || item.attributeValueIds?.join('-') || '')
+                    !isBasket ||
+                    status === "pendingAddItem" + item.productId + (item.productVariantId || attributeValueIds?.join('-') || '') ||
+                    status === "pendingRemoveItem" + item.productId + (item.productVariantId || attributeValueIds?.join('-') || '')
                   }
                 >
                   {Array.from({ length: Math.min(getStockForItem(item), 10) }, (_, i) => (
@@ -211,10 +234,10 @@ export default function BasketTable({ items, isBasket = true }: Props) {
               {/* Price */}
               <div className="text-right">
                 <p className="text-lg font-semibold text-gray-900">
-                  {(item.price * item.quantity)} rsd
+                  {(getItemPrice(item) * item.quantity)} rsd
                 </p>
                 <p className="text-sm text-gray-500">
-                  {item.price} rsd/kom
+                  {getItemPrice(item)} rsd/kom
                 </p>
               </div>
 
@@ -232,7 +255,7 @@ export default function BasketTable({ items, isBasket = true }: Props) {
                     )
                   }
                   disabled={
-                    status === "pendingRemoveItem" + item.productId + ((item as Item).productVariantId || item.attributeValueIds?.join('-') || '')
+                    status === "pendingRemoveItem" + item.productId + (item.productVariantId || attributeValueIds?.join('-') || '')
                   }
                   title="Ukloni iz korpe"
                 >
@@ -242,7 +265,7 @@ export default function BasketTable({ items, isBasket = true }: Props) {
             </div>
           </div>
         </div>
-      ))}
+      )})}
     </div>
   );
 }

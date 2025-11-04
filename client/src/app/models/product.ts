@@ -9,6 +9,7 @@ export interface Product {
     price: number
     description: string
     pictureUrl: string
+    imageUrl?: string  // Backend returns imageUrl
     categoryName: string
     categoryId: number
     productType: ProductType
@@ -25,7 +26,8 @@ export interface Product {
   export interface ProductVariant {
   productVariantId: number
   productId: number
-  price: number               // priceOverride ako postoji, inače osnovna cena
+  price: number               // Actual price to display (priceOverride if set, otherwise base price)
+  priceOverride?: number | null  // Custom price for this variant (null if using base price)
   quantityInStock: number
   attributeValueIds: number[]  // IDs od izabranih vrednosti atributa
   attributes?: VariantAttribute[] // detaljnije info o atributima

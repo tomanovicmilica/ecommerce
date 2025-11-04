@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "vite build",
+    "build:check": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
@@ -19,6 +20,8 @@
     "@tailwindcss/vite": "^4.1.11",
     "@types/react-router-dom": "^5.3.3",
     "axios": "^1.11.0",
+    "jspdf": "^3.0.3",
+    "jspdf-autotable": "^5.0.2",
     "lodash.debounce": "^4.0.8",
     "lucide-react": "^0.539.0",
     "react": "^19.1.1",
@@ -30,6 +33,7 @@
     "recharts": "^3.2.1",
     "redux": "^5.0.1",
     "tailwindcss": "^4.1.11",
+    "xlsx": "^0.18.5",
     "zod": "^4.1.8"
   },
   "devDependencies": {

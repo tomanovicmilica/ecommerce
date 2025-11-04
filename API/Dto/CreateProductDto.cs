@@ -16,7 +16,6 @@ namespace API.Dto
         [Required]
         public string? Description { get; set; }
 
-        [Required]
         public IFormFile? File { get; set; }
 
         public string? ImageUrl { get; set; }
@@ -26,19 +25,25 @@ namespace API.Dto
         // Digital product fields
         public ProductType ProductType { get; set; } = ProductType.Physical;
         public string? DigitalFileUrl { get; set; }
+        public IFormFile? DigitalFile { get; set; }  // For uploading digital files
         public bool IsInstantDelivery { get; set; } = false;
 
-        public List<ProductVariantDto>? Variants { get; set; } = new();
+        // Variants - used for projection in queries, not for form binding
+        public List<ProductVariantDto>? Variants { get; set; }
 
     }
     public class CreateProductDto : ProductDto
     {
+        [Required]
+        public new IFormFile? File { get; set; }
+
         public int CategoryId { get; set; }
     }
 
-    public class UpdateProductDto : CreateProductDto
+    public class UpdateProductDto : ProductDto
     {
         public int ProductId { get; set; }
+        public int CategoryId { get; set; }
     }
 }
 

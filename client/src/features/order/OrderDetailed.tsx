@@ -9,7 +9,7 @@ interface Props {
 }
 
 export default function OrderDetailed({ order, setSelectedOrder }: Props) {
-    const subtotal = order.items.reduce((sum, item) => sum + (item.quantity * item.price), 0) ?? 0;
+    const subtotal = order.orderItems?.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0) ?? order.subtotal ?? 0;
 
     // Define order status flow
     const statusFlow = [
@@ -122,9 +122,11 @@ export default function OrderDetailed({ order, setSelectedOrder }: Props) {
             </div>
 
             {/* Order Items */}
-            <div className="mb-8">
-                <BasketTable items={order.items} isBasket={false} />
-            </div>
+            {order.orderItems && order.orderItems.length > 0 && (
+                <div className="mb-8">
+                    <BasketTable items={order.orderItems} isBasket={false} />
+                </div>
+            )}
 
             {/* Order Summary */}
             <div className="flex justify-end">
@@ -158,9 +160,9 @@ export default function OrderDetailed({ order, setSelectedOrder }: Props) {
                             <h3 className="text-sm font-medium text-gray-500 mb-2">Shipping Address</h3>
                             <div className="text-gray-900">
                                 <p>{order.shippingAddress.firstName} {order.shippingAddress.lastName}</p>
-                                <p>{order.shippingAddress.address1}</p>
-                                {order.shippingAddress.address2 && <p>{order.shippingAddress.address2}</p>}
-                                <p>{order.shippingAddress.city}, {order.shippingAddress.state} {order.shippingAddress.zip}</p>
+                                <p>{order.shippingAddress.addressLine1 || order.shippingAddress.address1}</p>
+                                {order.shippingAddress.addressLine2 && <p>{order.shippingAddress.addressLine2}</p>}
+                                <p>{order.shippingAddress.city}, {order.shippingAddress.state} {order.shippingAddress.postalCode || order.shippingAddress.zip}</p>
                                 <p>{order.shippingAddress.country}</p>
                             </div>
                         </div>

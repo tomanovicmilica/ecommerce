@@ -5,6 +5,7 @@ import { currencyFormat } from '../../../app/util/util';
 import OrderStatusWorkflow from './OrderStatusWorkflow';
 import agent from '../../../app/api/agent';
 import { toast } from 'react-toastify';
+import OrderEmailModal from './OrderEmailModal';
 
 interface AdminOrder extends Order {
     customerName: string;
@@ -14,20 +15,39 @@ interface AdminOrder extends Order {
 interface Props {
     order: AdminOrder;
     onBack: () => void;
-    onStatusUpdate: (orderId: number, status: string) => void;
+    onStatusUpdate: () => Promise<void>;
 }
 
 export default function OrderDetails({ order, onBack, onStatusUpdate }: Props) {
     const [isEditingStatus, setIsEditingStatus] = useState(false);
     const [selectedStatus, setSelectedStatus] = useState(order.orderStatus);
+    const [currentOrderStatus, setCurrentOrderStatus] = useState<string>(order.orderStatus);
     const [trackingNumber, setTrackingNumber] = useState(order.trackingNumber || '');
     const [orderNotes, setOrderNotes] = useState('');
     const [isSavingTracking, setIsSavingTracking] = useState(false);
     const [isSavingNotes, setIsSavingNotes] = useState(false);
+    const [showEmailModal, setShowEmailModal] = useState(false);
 
-    const handleStatusUpdate = () => {
-        onStatusUpdate(order.orderId, selectedStatus);
-        setIsEditingStatus(false);
+    const handleStatusUpdate = async () => {
+        try {
+            // Validate that Shipped status requires tracking number
+            if (selectedStatus === 'Shipped') {
+                toast.error('Please use the Order Status Workflow section below to mark as shipped and add tracking number');
+                return;
+            }
+
+            console.log('Updating order status:', { orderId: order.orderId, selectedStatus });
+            // Make the API call to update the status
+            await agent.Admin.updateOrderStatus(order.orderId, selectedStatus);
+            setCurrentOrderStatus(selectedStatus);
+            setIsEditingStatus(false);
+            toast.success('Order status updated successfully');
+            // Notify parent to refresh
+            await onStatusUpdate();
+        } catch (error) {
+            console.error('Failed to update status:', error);
+            toast.error('Failed to update order status');
+        }
     };
 
     const handleSaveTracking = async () => {
@@ -101,6 +121,10 @@ export default function OrderDetails({ order, onBack, onStatusUpdate }: Props) {
 
     const statusOptions = ['Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled'];
 
+    const handleSendEmail = async (orderId: number, subject: string, message: string) => {
+        await agent.Admin.sendOrderEmail(orderId, subject, message);
+    };
+    
     return (
         <div className="p-6 max-w-6xl mx-auto">
             {/* Header */}
@@ -114,10 +138,10 @@ export default function OrderDetails({ order, onBack, onStatusUpdate }: Props) {
                     </button>
                     <div>
                         <h1 className="text-3xl font-bold text-gray-900">
-                            Order #{order.orderId}
+                            Porudžbina #{order.orderId}
                         </h1>
                         <p className="text-gray-600 mt-1">
-                            Placed on {new Date(order.orderDate).toLocaleDateString()}
+                            Naručena {new Date(order.orderDate).toLocaleDateString()}
                         </p>
                     </div>
                 </div>
@@ -129,7 +153,7 @@ export default function OrderDetails({ order, onBack, onStatusUpdate }: Props) {
                             <select
                                 value={selectedStatus}
                                 onChange={(e) => setSelectedStatus(e.target.value as typeof selectedStatus)}
-                                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-light-grey focus:border-transparent"
                             >
                                 {statusOptions.map(status => (
                                     <option key={status} value={status}>{status}</option>
@@ -137,26 +161,26 @@ export default function OrderDetails({ order, onBack, onStatusUpdate }: Props) {
                             </select>
                             <button
                                 onClick={handleStatusUpdate}
-                                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                                className="px-4 py-2 bg-brown text-white rounded-lg hover:bg-dark-grey transition-colors"
                             >
-                                Update
+                                Ažuriraj
                             </button>
                             <button
                                 onClick={() => setIsEditingStatus(false)}
                                 className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                             >
-                                Cancel
+                                Poništi
                             </button>
                         </div>
                     ) : (
                         <div className="flex items-center space-x-3">
-                            <div className={`flex items-center px-4 py-2 rounded-lg border ${getStatusColor(order.orderStatus)}`}>
-                                {getStatusIcon(order.orderStatus)}
-                                <span className="ml-2 font-medium">{order.orderStatus}</span>
+                            <div className={`flex items-center px-4 py-2 rounded-lg border ${getStatusColor(currentOrderStatus)}`}>
+                                {getStatusIcon(currentOrderStatus)}
+                                <span className="ml-2 font-medium">{currentOrderStatus}</span>
                             </div>
                             <button
                                 onClick={() => setIsEditingStatus(true)}
-                                className="p-2 text-gray-400 hover:text-indigo-600 transition-colors"
+                                className="p-2 text-gray-400 hover:text-brown transition-colors"
                             >
                                 <Edit className="w-5 h-5" />
                             </button>
@@ -170,12 +194,12 @@ export default function OrderDetails({ order, onBack, onStatusUpdate }: Props) {
                 <div className="lg:col-span-2 space-y-6">
                     {/* Items List */}
                     <div className="bg-white rounded-lg shadow-md p-6">
-                        <h2 className="text-xl font-semibold text-gray-900 mb-4">Order Items</h2>
+                        <h2 className="text-xl font-semibold text-gray-900 mb-4">Stavke porudžbine</h2>
                         <div className="space-y-4">
-                            {order.items.map((item, index) => (
+                            {order.orderItems?.map((item, index) => (
                                 <div key={index} className="flex justify-between items-center py-4 border-b border-gray-100 last:border-b-0">
                                     <div className="flex-1">
-                                        <h3 className="text-lg font-medium text-gray-900">{item.name}</h3>
+                                        <h3 className="text-lg font-medium text-gray-900">{item.productName}</h3>
                                         <p className="text-gray-500">Qty: {item.quantity}</p>
                                         {item.attributes && item.attributes.length > 0 && (
                                             <div className="mt-2">
@@ -189,10 +213,10 @@ export default function OrderDetails({ order, onBack, onStatusUpdate }: Props) {
                                     </div>
                                     <div className="text-right">
                                         <p className="text-lg font-medium text-gray-900">
-                                            {currencyFormat(item.price * item.quantity)}
+                                            {currencyFormat(item.unitPrice * item.quantity)}
                                         </p>
                                         <p className="text-sm text-gray-500">
-                                            {currencyFormat(item.price)} each
+                                            {currencyFormat(item.unitPrice)} svaka
                                         </p>
                                     </div>
                                 </div>
@@ -203,16 +227,16 @@ export default function OrderDetails({ order, onBack, onStatusUpdate }: Props) {
                         <div className="mt-6 pt-6 border-t border-gray-200">
                             <div className="space-y-2">
                                 <div className="flex justify-between">
-                                    <span className="text-gray-600">Subtotal</span>
+                                    <span className="text-gray-600">Zbir stavki</span>
                                     <span className="text-gray-900">{currencyFormat(order.subtotal)}</span>
                                 </div>
                                 <div className="flex justify-between">
-                                    <span className="text-gray-600">Delivery Fee</span>
-                                    <span className="text-gray-900">{currencyFormat(order.deliveryFee)}</span>
+                                    <span className="text-gray-600">Dostava</span>
+                                    <span className="text-gray-900">{currencyFormat(order.shippingCost)}</span>
                                 </div>
                                 <div className="flex justify-between text-lg font-semibold">
-                                    <span className="text-gray-900">Total</span>
-                                    <span className="text-gray-900">{currencyFormat(order.total)}</span>
+                                    <span className="text-gray-900">Ukupno</span>
+                                    <span className="text-gray-900">{currencyFormat(order.totalAmount)}</span>
                                 </div>
                             </div>
                         </div>
@@ -221,9 +245,12 @@ export default function OrderDetails({ order, onBack, onStatusUpdate }: Props) {
                     {/* Order Status Workflow */}
                     <OrderStatusWorkflow
                         orderId={order.orderId}
-                        currentStatus={order.orderStatus}
-                        onStatusUpdate={(newStatus) => {
-                            onStatusUpdate(order.orderId, newStatus);
+                        currentStatus={currentOrderStatus}
+                        onStatusUpdate={async () => {
+                            await onStatusUpdate();
+                            // Note: OrderStatusWorkflow updates the status via API,
+                            // we don't need to set currentOrderStatus here as the page
+                            // should be used to view details, and workflow handles the update
                         }}
                     />
                 </div>
@@ -232,7 +259,7 @@ export default function OrderDetails({ order, onBack, onStatusUpdate }: Props) {
                 <div className="space-y-6">
                     {/* Customer Information */}
                     <div className="bg-white rounded-lg shadow-md p-6">
-                        <h2 className="text-xl font-semibold text-gray-900 mb-4">Customer Information</h2>
+                        <h2 className="text-xl font-semibold text-gray-900 mb-4">Informacije o kupcu</h2>
                         <div className="space-y-3">
                             <div className="flex items-center space-x-3">
                                 <Mail className="w-5 h-5 text-gray-400" />
@@ -246,19 +273,19 @@ export default function OrderDetails({ order, onBack, onStatusUpdate }: Props) {
 
                     {/* Shipping Address */}
                     <div className="bg-white rounded-lg shadow-md p-6">
-                        <h2 className="text-xl font-semibold text-gray-900 mb-4">Shipping Address</h2>
+                        <h2 className="text-xl font-semibold text-gray-900 mb-4">Adresa za dostavu</h2>
                         <div className="flex items-start space-x-3">
                             <MapPin className="w-5 h-5 text-gray-400 mt-1" />
                             <div>
                                 <p className="font-medium text-gray-900">
                                     {order.shippingAddress.firstName} {order.shippingAddress.lastName}
                                 </p>
-                                <p className="text-gray-600">{order.shippingAddress.address1}</p>
-                                {order.shippingAddress.address2 && (
-                                    <p className="text-gray-600">{order.shippingAddress.address2}</p>
+                                <p className="text-gray-600">{order.shippingAddress.addressLine1 || order.shippingAddress.address1}</p>
+                                {order.shippingAddress.addressLine2 && (
+                                    <p className="text-gray-600">{order.shippingAddress.addressLine2}</p>
                                 )}
                                 <p className="text-gray-600">
-                                    {order.shippingAddress.city}, {order.shippingAddress.state} {order.shippingAddress.zip}
+                                    {order.shippingAddress.city}, {order.shippingAddress.state} {order.shippingAddress.postalCode || order.shippingAddress.zip}
                                 </p>
                                 <p className="text-gray-600">{order.shippingAddress.country}</p>
                             </div>
@@ -267,44 +294,47 @@ export default function OrderDetails({ order, onBack, onStatusUpdate }: Props) {
 
                     {/* Order Actions */}
                     <div className="bg-white rounded-lg shadow-md p-6">
-                        <h2 className="text-xl font-semibold text-gray-900 mb-4">Order Actions</h2>
+                        <h2 className="text-xl font-semibold text-gray-900 mb-4">Akcije</h2>
                         <div className="space-y-3">
-                            <button className="w-full flex items-center justify-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">
+                            <button 
+                                onClick={() => setShowEmailModal(true)}
+                                className="w-full flex items-center justify-center px-4 py-2 bg-brown text-white rounded-lg hover:bg-dark-grey transition-colors"
+                            >
                                 <Mail className="w-4 h-4 mr-2" />
-                                Send Email to Customer
+                                Pošalji email kupcu
                             </button>
-                            <button className="w-full flex items-center justify-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
-                                Print Invoice
+                            <button className="w-full flex items-center justify-center px-4 py-2 bg-light-grey text-white rounded-lg hover:bg-dark-grey transition-colors">
+                                Štampaj račun
                             </button>
-                            <button className="w-full flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                            <button className="w-full flex items-center justify-center px-4 py-2 bg-beige text-white rounded-lg hover:bg-dark-grey transition-colors">
                                 Print Packing Slip
                             </button>
                         </div>
                     </div>
 
                     {/* Tracking Information */}
-                    {(order.orderStatus === 'Shipped' || order.orderStatus === 'Delivered') && (
+                    {(currentOrderStatus === 'Shipped' || currentOrderStatus === 'Delivered') && (
                         <div className="bg-white rounded-lg shadow-md p-6">
-                            <h2 className="text-xl font-semibold text-gray-900 mb-4">Tracking Information</h2>
+                            <h2 className="text-xl font-semibold text-gray-900 mb-4">Informacije za praćenje</h2>
                             <div className="space-y-3">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Tracking Number
+                                        Broj za praćenja
                                     </label>
                                     <input
                                         type="text"
                                         value={trackingNumber}
                                         onChange={(e) => setTrackingNumber(e.target.value)}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-light-grey focus:border-transparent"
                                         placeholder="Enter tracking number"
                                     />
                                 </div>
                                 <button
                                     onClick={handleSaveTracking}
                                     disabled={isSavingTracking}
-                                    className="w-full px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                                    className="w-full px-4 py-2 bg-brown text-white rounded-lg hover:bg-dark-greytransition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
                                 >
-                                    {isSavingTracking ? 'Saving...' : 'Update Tracking'}
+                                    {isSavingTracking ? 'Čuvanje...' : 'Ažuriraj praćenje'}
                                 </button>
                             </div>
                         </div>
@@ -312,13 +342,13 @@ export default function OrderDetails({ order, onBack, onStatusUpdate }: Props) {
 
                     {/* Order Notes */}
                     <div className="bg-white rounded-lg shadow-md p-6">
-                        <h2 className="text-xl font-semibold text-gray-900 mb-4">Order Notes</h2>
+                        <h2 className="text-xl font-semibold text-gray-900 mb-4">Napomene</h2>
                         <div className="space-y-3">
                             <textarea
                                 value={orderNotes}
                                 onChange={(e) => setOrderNotes(e.target.value)}
                                 rows={4}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-light-grey focus:border-transparent"
                                 placeholder="Add internal notes about this order..."
                             />
                             <button
@@ -326,10 +356,19 @@ export default function OrderDetails({ order, onBack, onStatusUpdate }: Props) {
                                 disabled={isSavingNotes}
                                 className="w-full px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
                             >
-                                {isSavingNotes ? 'Saving...' : 'Save Notes'}
+                                {isSavingNotes ? 'Čuvanje...' : 'Sačuvaj napomene'}
                             </button>
                         </div>
                     </div>
+                    {showEmailModal && (
+                        <OrderEmailModal
+                            orderId={order.orderId}
+                            customerEmail={order.customerEmail}
+                            customerName={order.customerName}
+                            onClose={() => setShowEmailModal(false)}
+                            onSend={handleSendEmail}
+                        />
+                    )}
                 </div>
             </div>
         </div>

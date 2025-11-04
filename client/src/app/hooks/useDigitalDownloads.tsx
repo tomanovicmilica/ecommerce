@@ -21,27 +21,32 @@ export function useDigitalDownloads() {
         }
     }, []);
 
-    const downloadFile = useCallback(async (downloadId: number, filename: string) => {
+    const downloadFile = useCallback(async (downloadId: number, _filename: string) => {
         try {
-            const tokenResponse = await agent.DigitalDownloads.getDownloadToken(downloadId);
-            const { blob, filename: serverFilename } = await agent.DigitalDownloads.downloadFile(tokenResponse.token);
+            // Get a secure download token from the backend
+            const { token } = await agent.DigitalDownloads.getDownloadToken(downloadId);
 
-            const url = window.URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.setAttribute('download', serverFilename || filename);
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            window.URL.revokeObjectURL(url);
+            // Use the token to download the file through the backend
+            // This will handle authentication and download counting
+            const downloadUrl = `http://localhost:5089/api/digitaldownloads/download/${token}`;
 
-            await agent.DigitalDownloads.markDownloadCompleted(downloadId);
+            // Open the download URL in a new tab
+            window.open(downloadUrl, '_blank');
 
+            // Refresh the downloads list to show updated download count
             await fetchUserDownloads();
+
             toast.success('Download started successfully');
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error downloading file:', error);
-            toast.error('Failed to download file');
+
+            if (error?.status === 400) {
+                toast.error('Download limit exceeded or link expired');
+            } else if (error?.status === 404) {
+                toast.error('Download not found');
+            } else {
+                toast.error('Failed to download file');
+            }
         }
     }, [fetchUserDownloads]);
 

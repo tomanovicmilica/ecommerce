@@ -351,7 +351,39 @@ export function generateCSV(data: any[], columns: string[]): string {
     return [headers, ...rows].join('\n');
 }
 
-// Utility function to trigger file download
+// Generate XLSX file using SheetJS
+export async function generateXLSX(data: any[], columns: string[], filename: string) {
+    // Dynamically import the xlsx library
+    const XLSX = await import('xlsx');
+
+    // Prepare data with headers
+    const headers = columns;
+    const worksheetData = [
+        headers,
+        ...data.map(item => columns.map(col => item[col] || ''))
+    ];
+
+    // Create worksheet and workbook
+    const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Data');
+
+    // Auto-size columns
+    const maxWidth = 50;
+    const colWidths = headers.map((_, i) => {
+        const maxLength = Math.max(
+            headers[i].length,
+            ...worksheetData.slice(1).map(row => String(row[i] || '').length)
+        );
+        return { wch: Math.min(maxLength + 2, maxWidth) };
+    });
+    worksheet['!cols'] = colWidths;
+
+    // Generate and download file
+    XLSX.writeFile(workbook, filename);
+}
+
+// Utility function to trigger file download for text-based formats (CSV, JSON)
 export function downloadFile(content: string, filename: string, mimeType: string) {
     const blob = new Blob([content], { type: mimeType });
     const url = URL.createObjectURL(blob);

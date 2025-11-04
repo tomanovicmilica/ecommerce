@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Read(//c/Users/Administrator/source/repos/Ecomm_diplomski/API/Services/**)"
+      "Read(//c/Users/Administrator/source/repos/Ecomm_diplomski/API/Services/**)",
+      "Read(//c/Users/Administrator/source/repos/Ecomm_diplomski/API/Controllers/**)"
     ],
     "deny": [],
     "ask": []
