@@ -54,19 +54,35 @@ builder.Services.AddDbContext<StoreContext>(opt =>
     }
     else
     {
-        Console.WriteLine("[DB] Using DATABASE_URL from environment");
+        Console.WriteLine($"[DB] Using DATABASE_URL from environment (length: {connectionString.Length})");
     }
 
     // Render provides DATABASE_URL in a specific format that needs conversion
     if (connectionString != null && connectionString.StartsWith("postgres://"))
     {
-        // Parse Render's DATABASE_URL format: postgres://user:password@host:port/database
-        var uri = new Uri(connectionString);
-        var db = uri.AbsolutePath.Trim('/');
-        var user = uri.UserInfo.Split(':')[0];
-        var password = uri.UserInfo.Split(':')[1];
-        connectionString = $"Host={uri.Host};Port={uri.Port};Database={db};Username={user};Password={password};SSL Mode=Require;Trust Server Certificate=true";
-        Console.WriteLine($"[DB] Converted connection string - Host: {uri.Host}, Database: {db}");
+        try
+        {
+            // Parse Render's DATABASE_URL format: postgres://user:password@host:port/database
+            var uri = new Uri(connectionString);
+            var db = uri.AbsolutePath.Trim('/');
+            var userInfo = uri.UserInfo.Split(':');
+            var user = userInfo[0];
+            var password = userInfo.Length > 1 ? Uri.UnescapeDataString(userInfo[1]) : "";
+
+            connectionString = $"Host={uri.Host};Port={uri.Port};Database={db};Username={user};Password={password};SSL Mode=Require;Trust Server Certificate=true";
+            Console.WriteLine($"[DB] Converted connection string - Host: {uri.Host}, Port: {uri.Port}, Database: {db}, User: {user}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[DB] ERROR converting connection string: {ex.Message}");
+            throw;
+        }
+    }
+
+    if (string.IsNullOrEmpty(connectionString))
+    {
+        Console.WriteLine("[DB] ERROR: Connection string is empty!");
+        throw new InvalidOperationException("Database connection string is not configured");
     }
 
     opt.UseNpgsql(connectionString);
