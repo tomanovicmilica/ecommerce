@@ -189,28 +189,35 @@ app.MapHub<API.Hubs.NotificationHub>("/notificationHub");
 // SPA fallback for React Router
 app.MapFallbackToFile("index.html");
 
-var scope = app.Services.CreateScope();
-var context = scope.ServiceProvider.GetRequiredService<StoreContext>();
-var userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
-var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<Role>>();
-var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-try
+// Run migrations and seed data before starting the app
+using (var scope = app.Services.CreateScope())
 {
-    Console.WriteLine("[MIGRATION] Starting database migration...");
-    await context.Database.MigrateAsync();
-    Console.WriteLine("[MIGRATION] Database migration completed successfully");
+    var services = scope.ServiceProvider;
+    var logger = services.GetRequiredService<ILogger<Program>>();
 
-    Console.WriteLine("[SEED] Starting database initialization...");
-    await DbInitializer.Initialize(context, userManager, roleManager);
-    Console.WriteLine("[SEED] Database initialization completed successfully");
-}
-catch (Exception ex)
-{
-    logger.LogError(ex, "A problem occurred during migration");
-    Console.WriteLine($"[MIGRATION ERROR] {ex.Message}");
-    Console.WriteLine($"[MIGRATION ERROR] Stack trace: {ex.StackTrace}");
+    try
+    {
+        Console.WriteLine("[MIGRATION] Starting database migration...");
+        var context = services.GetRequiredService<StoreContext>();
+        await context.Database.MigrateAsync();
+        Console.WriteLine("[MIGRATION] Database migration completed successfully");
+
+        Console.WriteLine("[SEED] Starting database initialization...");
+        var userManager = services.GetRequiredService<UserManager<User>>();
+        var roleManager = services.GetRequiredService<RoleManager<Role>>();
+        await DbInitializer.Initialize(context, userManager, roleManager);
+        Console.WriteLine("[SEED] Database initialization completed successfully");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "A problem occurred during migration");
+        Console.WriteLine($"[MIGRATION ERROR] {ex.Message}");
+        Console.WriteLine($"[MIGRATION ERROR] Stack trace: {ex.StackTrace}");
+        throw; // Re-throw to prevent app from starting with uninitialized database
+    }
 }
 
+Console.WriteLine("[APP] Starting web application...");
 app.Run();
 
 
