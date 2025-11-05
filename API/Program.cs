@@ -58,7 +58,7 @@ builder.Services.AddDbContext<StoreContext>(opt =>
     }
 
     // Render provides DATABASE_URL in a specific format that needs conversion
-    if (connectionString != null && connectionString.StartsWith("postgres://"))
+    if (connectionString != null && (connectionString.StartsWith("postgres://") || connectionString.StartsWith("postgresql://")))
     {
         try
         {
