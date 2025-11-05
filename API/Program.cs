@@ -196,12 +196,19 @@ var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<Role>>();
 var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
 try
 {
+    Console.WriteLine("[MIGRATION] Starting database migration...");
     await context.Database.MigrateAsync();
+    Console.WriteLine("[MIGRATION] Database migration completed successfully");
+
+    Console.WriteLine("[SEED] Starting database initialization...");
     await DbInitializer.Initialize(context, userManager, roleManager);
+    Console.WriteLine("[SEED] Database initialization completed successfully");
 }
 catch (Exception ex)
 {
     logger.LogError(ex, "A problem occurred during migration");
+    Console.WriteLine($"[MIGRATION ERROR] {ex.Message}");
+    Console.WriteLine($"[MIGRATION ERROR] Stack trace: {ex.StackTrace}");
 }
 
 app.Run();
