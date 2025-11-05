@@ -68,9 +68,10 @@ builder.Services.AddDbContext<StoreContext>(opt =>
             var userInfo = uri.UserInfo.Split(':');
             var user = userInfo[0];
             var password = userInfo.Length > 1 ? Uri.UnescapeDataString(userInfo[1]) : "";
+            var port = uri.Port > 0 ? uri.Port : 5432; // Default to 5432 if port not specified
 
-            connectionString = $"Host={uri.Host};Port={uri.Port};Database={db};Username={user};Password={password};SSL Mode=Require;Trust Server Certificate=true";
-            Console.WriteLine($"[DB] Converted connection string - Host: {uri.Host}, Port: {uri.Port}, Database: {db}, User: {user}");
+            connectionString = $"Host={uri.Host};Port={port};Database={db};Username={user};Password={password};SSL Mode=Require;Trust Server Certificate=true";
+            Console.WriteLine($"[DB] Converted connection string - Host: {uri.Host}, Port: {port}, Database: {db}, User: {user}");
         }
         catch (Exception ex)
         {
