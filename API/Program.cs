@@ -190,8 +190,9 @@ app.MapHub<API.Hubs.NotificationHub>("/notificationHub");
 app.MapFallbackToFile("index.html");
 
 // Run migrations and seed data before starting the app
-using (var scope = app.Services.CreateScope())
+try
 {
+    using var scope = app.Services.CreateScope();
     var services = scope.ServiceProvider;
     var logger = services.GetRequiredService<ILogger<Program>>();
 
@@ -213,8 +214,12 @@ using (var scope = app.Services.CreateScope())
         logger.LogError(ex, "A problem occurred during migration");
         Console.WriteLine($"[MIGRATION ERROR] {ex.Message}");
         Console.WriteLine($"[MIGRATION ERROR] Stack trace: {ex.StackTrace}");
-        throw; // Re-throw to prevent app from starting with uninitialized database
+        Console.WriteLine($"[MIGRATION ERROR] Inner exception: {ex.InnerException?.Message}");
     }
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"[STARTUP ERROR] Failed to create service scope: {ex.Message}");
 }
 
 Console.WriteLine("[APP] Starting web application...");
