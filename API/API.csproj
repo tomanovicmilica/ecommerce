@@ -27,4 +27,11 @@
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.14.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Include Migrations folder in publish output -->
+    <Content Include="Migrations\**\*.cs">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>
